@@ -1,0 +1,22 @@
+# Session/local state
+.remember/
+.env
+.env.*
+!.env.example
+
+# Dependencies and build
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+
+# Media and model caches (never commit weights or user media)
+*.mp4
+*.webm
+*.wav
+hf-cache/
+media/
+
+# OS
+.DS_Store
