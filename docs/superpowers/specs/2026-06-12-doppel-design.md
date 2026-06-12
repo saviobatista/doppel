@@ -200,11 +200,11 @@ Serviços: `api`, `web` (Caddy servindo o build do Vite), `postgres`, `redis`, `
 
 Família confirmada: g7e = NVIDIA RTX PRO 6000 Blackwell Server Edition, 96 GB VRAM por GPU, Intel Emerald Rapids, NVMe local. Quota disponível: 192 vCPUs para a família G.
 
-| Tamanho | vCPU | GPUs | RAM | NVMe | On-demand (us-east-1) |
-|---|---|---|---|---|---|
-| g7e.2xlarge | 8 | 1 | 64 GiB | 1.9 TB | ~US$ 3,36/h |
-| g7e.4xlarge | 16 | 1 | 128 GiB | 1.9 TB | ~US$ 4,50/h (estimado, validar) |
-| g7e.12xlarge | 48 | 2 | 512 GiB | 3.8 TB | ~US$ 8,29/h |
+| Tamanho | vCPU | GPUs | RAM | NVMe |
+|---|---|---|---|---|
+| g7e.2xlarge | 8 | 1 | 64 GiB | 1.9 TB |
+| g7e.4xlarge | 16 | 1 | 128 GiB | 1.9 TB |
+| g7e.12xlarge | 48 | 2 | 512 GiB | 3.8 TB |
 
 **Fase selfhosted-dev (uma caixa, validação do pipeline): 1x g7e.4xlarge.** Uma GPU de 96 GB segura todos os modelos da faixa rápida residentes:
 
@@ -225,14 +225,14 @@ Deploy: o mesmo docker compose com profile `selfhosted`. NVMe local como `HF_HOM
 - GPU 0 ("fala e cérebro"): vLLM Qwen 32B + whisper + TTS
 - GPU 1 ("vídeo"): LatentSync + LTX-Video + ACE-Step
 - 48 vCPUs folgam para `compose-worker` e a api no mesmo nó (no EKS, separados).
-- Quota restante: 144 vCPUs = até 18x g7e.2xlarge de burst para b-roll paralelo e faixa HQ (Wan 2.2 14B fp8 cabe em 1 GPU de 96 GB com folga). Lane background tolera spot (jobs idempotentes).
+- Quota restante: 144 vCPUs = até 18x g7e.2xlarge de burst para b-roll paralelo e faixa HQ (Wan 2.2 14B fp8 cabe em 1 GPU de 96 GB com folga).
 - MIG (a RTX PRO 6000 Blackwell suporta particionamento): otimização futura para isolar workers leves; no MVP, workers compartilham GPU via processo (cuidado com fragmentação de VRAM; medir antes de otimizar).
 
 ### 9.3 EKS (handoff: Bruno)
 
 - **Cluster**: EKS 1.33+, VPC com 3 AZs, nodes em subnets privadas, NAT por AZ. IaC 100% Terraform (módulos: vpc, eks, karpenter, rds, elasticache, s3-cdn, ecr, iam-irsa).
 - **Node groups fixos**: `system` (2x m7i.large: ingress, observabilidade, KEDA, Karpenter controller) e `apps` (m7i.xlarge com HPA: api, web, compose-worker).
-- **GPU via Karpenter NodePool**: família g7e, on-demand para a lane `interactive` (label `lane=interactive`), on-demand+spot para `background` (label `lane=background`), taint `nvidia.com/gpu=true:NoSchedule`, limites respeitando a quota de 192 vCPUs. NVIDIA device plugin via addon/DaemonSet.
+- **GPU via Karpenter NodePool**: família g7e, on-demand (créditos AWS dispensam spot), NodePools com labels `lane=interactive` e `lane=background`, taint `nvidia.com/gpu=true:NoSchedule`, limites respeitando a quota de 192 vCPUs. NVIDIA device plugin via addon/DaemonSet.
 - **Workers**: 1 Deployment por worker, requests de GPU inteira para os pesados (broll, avatar) e time-slicing para os leves (voice, stt) numa GPU compartilhada, se a medição da fase selfhosted-dev validar.
 - **Autoscaling**: KEDA ScaledObjects sobre lag das Redis Streams; `interactive` escala 1 para N agressivo; `background` escala 0 para N (scale-to-zero fora de pico).
 - **Dados gerenciados**: RDS Postgres (db.t4g.medium, single-AZ no MVP), ElastiCache Redis (node m7g.large; Streams precisam de memória e persistência AOF), S3 + CloudFront para entrega dos vídeos (URLs assinadas), ECR para imagens.
@@ -250,18 +250,13 @@ Deploy: o mesmo docker compose com profile `selfhosted`. NVMe local como `HF_HOM
 - **Escopo de geração**: o avatar só existe para quem gravou ao vivo na sessão; prompts de b-roll passam pelo filtro de conteúdo do LLM de roteiro (negative prompts + recusa de temas vetados).
 - **Transporte e storage**: TLS em tudo, buckets privados com presigned URLs curtas, criptografia at rest (SSE-S3/KMS).
 
-## 11. Custos estimados (validar pricing na implementação)
+## 11. Custos e créditos
 
-**Self-hosted (produção MVP, g7e.12xlarge):**
+A AWS está coberta por créditos amplos do projeto: **dimensionamento (seção 9) é a variável de engenharia, não preço**.
 
-- US$ 8,29/h ligada. Um vídeo (faixa rápida) consome ~4 GPU-minuto: custo marginal ~US$ 0,30-0,60/vídeo em utilização razoável.
-- Ociosidade é o custo real: 12xlarge 24/7 = ~US$ 6.000/mês. Mitigação: desligar fora de horário no MVP; no EKS, Karpenter + scale-to-zero da lane background.
-
-**Managed (por vídeo de 30s, ordens de grandeza):**
-
-- Nova Reel (3 b-rolls x 6s): ~US$ 1,50 | HeyGen (30s avatar): ~US$ 1-3 | ElevenLabs (TTS+música): ~US$ 0,50 | Claude + Transcribe: ~US$ 0,10. **Total: ~US$ 3-5/vídeo**, custo fixo zero.
-
-**Guia de decisão**: managed até validar a experiência (M0-M1); breakeven contra uma 12xlarge em meio período (~US$ 2.000/mês) fica em torno de 400-600 vídeos/mês. Kill-switch de orçamento por chave de API no perfil managed desde o dia 1.
+- **Coberto por créditos** (EC2 g7e, Bedrock/Nova Reel, Transcribe, S3/CloudFront, EKS, RDS, ElastiCache): sem restrição de uso. Manter a 12xlarge de produção ligada é aceitável; o scale-to-zero da lane background continua valendo por higiene de capacidade (quota de 192 vCPUs), não por dinheiro.
+- **Dinheiro real** (terceiros fora da AWS: ElevenLabs, HeyGen): kill-switch de orçamento e quotas por device aplicam-se somente a esses drivers. Com créditos, vale antecipar os drivers selfhosted de voz e avatar (M2) e usar os terceiros apenas como referência de qualidade em bake-offs.
+- **Eficiência medida em GPU-minuto por vídeo**, instrumentada por job: é o indicador de capacidade que alimenta o sizing do Bruno, no lugar de custo por vídeo.
 
 ## 12. Riscos
 
@@ -272,7 +267,7 @@ Deploy: o mesmo docker compose com profile `selfhosted`. NVMe local como `HF_HOM
 | Voz PT-BR fraca com 6-10s de referência | Avatar não soa como o usuário | ElevenLabs no managed como referência de qualidade; F5-TTS PT-BR no selfhosted; coletar 2x mais áudio (o texto de leitura já dá ~40s) |
 | Licenças de pesos (XTTS CPML, MusicGen CC-BY-NC, LTX condicionada) | Bloqueio comercial | Matriz 5.2 já segrega protótipo vs rota comercial; auditoria de licenças como gate do M2 (questão aberta Q1) |
 | Disponibilidade g7e (família nova, poucas regiões) | Sem capacidade | us-east-1/us-west-2 confirmadas; fallback g6e (L40S 48GB, cabe tudo exceto Qwen 32B + vídeo na mesma GPU; usar 2 instâncias) |
-| Custo managed descontrolado | Queima de caixa | Kill-switch de orçamento, quotas por device, custos por vídeo no dashboard |
+| Gasto real com terceiros não-AWS (ElevenLabs/HeyGen) | Queima de caixa (créditos não cobrem) | Kill-switch de orçamento e quotas por device nesses drivers; preferir drivers AWS/selfhosted cobertos por créditos |
 | Abuso (deepfake de terceiros) | Dano reputacional/legal | Código anti-replay validado por STT, consentimento gravado, watermark + C2PA, avatar restrito à sessão ao vivo |
 
 ## 13. Fases de entrega
@@ -281,7 +276,7 @@ Deploy: o mesmo docker compose com profile `selfhosted`. NVMe local como `HF_HOM
 |---|---|---|
 | M0 | Walking skeleton no Mac: compose `managed` + floci, fluxo inteiro com stubs (vídeo placeholder), state machine do front completa com as animações | Experiência navegável de ponta a ponta com assets fake |
 | M1 | Experiência real no perfil managed (Bedrock/ElevenLabs/HeyGen/Nova Reel), faixa rápida única | Hello < 60s; reveal < 3 min (limites do managed, ver 5.2); ciclo thumbs down funcional |
-| M2 | Perfil selfhosted na g7e.4xlarge (Bruno: 9.2), paridade com M1, metas de latência plenas | Hello 10-20s; reveal < 120s; custo/vídeo medido |
+| M2 | Perfil selfhosted na g7e.4xlarge (Bruno: 9.2), paridade com M1, metas de latência plenas | Hello 10-20s; reveal < 120s; GPU-min/vídeo medido |
 | M3 | EKS (Bruno: 9.3), Karpenter + KEDA, RDS/ElastiCache/S3+CloudFront, Terraform | Pipeline completo no cluster; scale-to-zero da lane background |
 | M4 | Faixa HQ em background + badge HD na galeria + burst de b-roll paralelo | Item da galeria atualiza para 1080p sem ação do usuário |
 
@@ -295,4 +290,4 @@ Contas e login (desenho B fica documentado), multi-idioma, feed público/social,
 2. **Qualidade real do F5-TTS PT-BR vs XTTS-v2** com 40s de referência: bake-off na fase selfhosted-dev.
 3. **MIG vs time-slicing** na RTX PRO 6000 para os workers leves: medir fragmentação de VRAM no M2.
 4. **Marca/domínio Doppel**: verificação de disponibilidade e conflitos antes do go-live público.
-5. **Preço exato g7e.4xlarge** e disponibilidade de spot para a família (afeta custo da lane background).
+5. **Disponibilidade de capacidade g7e** nas regiões alvo: família recente; validar capacity on-demand para o burst de até 18 instâncias.
