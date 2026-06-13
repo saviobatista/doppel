@@ -173,3 +173,24 @@ async def test_delete_me_revokes_token_and_rows(app, client, device_token):
     assert resp.status_code == 204
     resp = await client.get("/v1/gallery", headers={"X-Device-Token": device_token})
     assert resp.status_code == 401
+
+
+async def test_download_video_returns_bytes_as_attachment(app, client, device_token):
+    avatar_id = await _seed_ready_avatar(app, device_token)
+    async with app.state.session_factory() as s:
+        device = (await s.execute(select(Device))).scalar_one()
+        v = Video(device_id=device.id, avatar_id=avatar_id, status_fast="ready",
+                  assets={"fast": "videos/v/fast.mp4"}, rating="up")
+        s.add(v)
+        await s.commit()
+        vid = v.id
+    await app.state.storage.put("videos/v/fast.mp4", b"FINALVIDEO", "video/mp4")
+    resp = await client.get(f"/v1/videos/{vid}/download", headers={"X-Device-Token": device_token})
+    assert resp.status_code == 200
+    assert resp.content == b"FINALVIDEO"
+    assert "attachment" in resp.headers["content-disposition"]
+
+
+async def test_download_video_404_for_unknown(app, client, device_token):
+    resp = await client.get("/v1/videos/nope/download", headers={"X-Device-Token": device_token})
+    assert resp.status_code == 404

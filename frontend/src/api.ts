@@ -128,6 +128,19 @@ export async function fetchGallery(): Promise<GalleryItem[]> {
   return (await resp.json()).videos;
 }
 
+export async function downloadVideo(videoId: string): Promise<void> {
+  // Fetch from our api (CORS-allowed) rather than the floci URL (no CORS), then
+  // save the blob so the browser performs a real file download.
+  const resp = await fetch(`${BASE}/v1/videos/${videoId}/download`, { headers: authHeaders() });
+  const blob = await resp.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = `doppel-${videoId}.mp4`;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
 export async function deleteMe(): Promise<void> {
   await fetch(`${BASE}/v1/me`, { method: "DELETE", headers: authHeaders() });
   localStorage.removeItem("doppel_token");

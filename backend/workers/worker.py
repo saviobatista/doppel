@@ -1,0 +1,297 @@
+"""Doppel generation worker: consumes jobs and drives the managed providers."""
+import asyncio
+import os
+import socket
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+import redis.asyncio as aioredis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from doppel_api import cache
+from doppel_api.config import get_settings
+from doppel_api.constants import FEEDBACK_LINE, HELLO_LINE
+from doppel_api.db import init_db, make_engine, make_session_factory
+from doppel_api.events import publish
+from doppel_api.models import Avatar, Job, Video
+from doppel_api.providers import media, script, video, voice
+from doppel_api.queue import ack, ensure_groups, read_next
+from doppel_api.storage import S3Storage, Storage
+
+
+@dataclass
+class WorkerContext:
+    session_factory: async_sessionmaker[AsyncSession]
+    storage: Storage
+    redis: object
+    consumer: str
+
+
+def _fmt_exc(exc: Exception) -> str:
+    # provider SDK errors (e.g. ElevenLabs ApiError) have an empty repr; surface .body
+    body = getattr(exc, "body", None)
+    return f"{type(exc).__name__}: {body or exc}"
+
+
+async def _fabric_bytes(face_path: str, audio_path: str) -> bytes:
+    face_url = await video.upload(face_path)
+    audio_url = await video.upload(audio_path)
+    return await media.fetch(await video.talking(face_url, audio_url))
+
+
+async def _flux_bytes(prompt: str) -> bytes:
+    return await media.fetch(await video.image(prompt))
+
+
+async def _kling_bytes(image_path: str, motion: str) -> bytes:
+    image_url = await video.upload(image_path)
+    return await media.fetch(await video.broll(image_url, motion))
+
+
+async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
+    avatar_id = payload["avatar_id"]
+    settings = get_settings()
+    await publish(ctx.redis, avatar_id, "progress", {"step": "preparing_avatar"})
+
+    async with ctx.session_factory() as s:
+        avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
+        source_key = avatar.assets["source"]
+
+    hello_key = f"avatars/{avatar_id}/hello.mp4"
+    feedback_key = f"avatars/{avatar_id}/feedback.mp4"
+    face_key = f"avatars/{avatar_id}/face.png"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        source_bytes = await ctx.storage.get(source_key)
+        ext = "mp4" if source_key.endswith(".mp4") else "webm"
+        cache.put_blob("source", [avatar_id], ext, source_bytes)
+
+        src = tmp / "source"
+        src.write_bytes(source_bytes)
+        face_path = await media.extract_frame(str(src), str(tmp / "face.png"))
+        ref_path = await media.extract_audio(str(src), str(tmp / "ref.wav"))
+        face_bytes = Path(face_path).read_bytes()  # noqa: ASYNC240
+        ref_bytes = Path(ref_path).read_bytes()  # noqa: ASYNC240
+        await ctx.storage.put(face_key, face_bytes, "image/png")
+
+        voice_id = await cache.value(
+            "clone", [ref_bytes],
+            lambda: voice.clone(ref_path, name=f"doppel-{avatar_id[:8]}"),
+        )
+        model = settings.elevenlabs_model
+        for line, key, name in (
+            (HELLO_LINE, hello_key, f"{avatar_id}-hello"),
+            (FEEDBACK_LINE, feedback_key, f"{avatar_id}-feedback"),
+        ):
+            audio_path = await cache.blob(
+                "tts", [voice_id, line, model], "mp3",
+                lambda v=voice_id, ln=line: voice.tts(v, ln),
+            )
+            audio_bytes = Path(audio_path).read_bytes()  # noqa: ASYNC240
+            talk_path = await cache.blob(
+                "fabric", [face_bytes, audio_bytes, "480p"], "mp4",
+                lambda fp=face_path, ap=audio_path: _fabric_bytes(fp, ap),
+            )
+            talk_bytes = Path(talk_path).read_bytes()  # noqa: ASYNC240
+            cache.save_render(name, "mp4", talk_bytes)  # human-friendly local copy
+            await ctx.storage.put(key, talk_bytes, "video/mp4")
+
+    async with ctx.session_factory() as s:
+        avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
+        avatar.status = "ready"
+        avatar.assets = {
+            **avatar.assets,
+            "face_image": face_key,
+            "voice_id": voice_id,
+            "hello": hello_key,
+            "feedback": feedback_key,
+        }
+        await s.commit()
+
+    await publish(ctx.redis, avatar_id, "hello_ready", {
+        "hello_url": await ctx.storage.presign_get(hello_key),
+        "feedback_url": await ctx.storage.presign_get(feedback_key),
+    })
+
+
+async def _gen_broll(ctx, scene, idx, total, video_id, sem) -> media.BrollClip | None:
+    async with sem:
+        try:
+            prompt = scene.get("prompt", "")
+            motion = scene.get("motion") or prompt
+            img_path = await cache.blob(
+                "flux", [prompt, "portrait_16_9"], "jpg", lambda p=prompt: _flux_bytes(p)
+            )
+            img_bytes = Path(img_path).read_bytes()  # noqa: ASYNC240
+            clip_path = await cache.blob(
+                "kling", [img_bytes, motion, "5"], "mp4",
+                lambda ip=img_path, m=motion: _kling_bytes(ip, m),
+            )
+            await publish(ctx.redis, video_id, "progress",
+                          {"step": f"component_{idx + 2}_of_{total}"})
+            return media.BrollClip(
+                path=clip_path, start=float(scene["start"]), end=float(scene["end"])
+            )
+        except Exception as exc:  # graceful degrade: drop this scene, keep the video
+            print(f"broll scene {scene.get('id')} failed, dropping: {_fmt_exc(exc)}")
+            return None
+
+
+async def handle_fast_generate(ctx: "WorkerContext", payload: dict) -> None:
+    video_id = payload["video_id"]
+    settings = get_settings()
+
+    async with ctx.session_factory() as s:
+        v = (await s.execute(select(Video).where(Video.id == video_id))).scalar_one()
+        briefing_key = v.assets["briefing"]
+        avatar = (await s.execute(select(Avatar).where(Avatar.id == v.avatar_id))).scalar_one()
+        voice_id = avatar.assets["voice_id"]
+        face_key = avatar.assets["face_image"]
+
+    await publish(ctx.redis, video_id, "progress", {"step": "scripting"})
+    fast_key = f"videos/{video_id}/fast.mp4"
+    model = settings.elevenlabs_model
+    target = settings.video_target_seconds
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        briefing_bytes = await ctx.storage.get(briefing_key)
+        brief = tmp / "briefing"
+        brief.write_bytes(briefing_bytes)
+
+        transcript = await cache.value("stt", [briefing_bytes], lambda: voice.stt(str(brief)))
+        script_json = await cache.value(
+            "script", [transcript, str(target)],
+            lambda: script.build_script(transcript, target),
+        )
+        narration_text = script_json["narration"]["text"]
+
+        async def _tts_ts_producer():
+            audio, cues = await voice.tts_with_timestamps(voice_id, narration_text)
+            return audio, [{"text": c.text, "start": c.start, "end": c.end} for c in cues]
+
+        narration_path, cue_dicts = await cache.blob_with_meta(
+            "tts_ts", [voice_id, narration_text, model], "mp3", _tts_ts_producer
+        )
+        cues = [media.CaptionCue(**c) for c in cue_dicts]
+
+        face_bytes = await ctx.storage.get(face_key)
+        face_path = tmp / "face.png"
+        face_path.write_bytes(face_bytes)
+        narration_bytes = Path(narration_path).read_bytes()  # noqa: ASYNC240
+
+        broll_scenes = [sc for sc in script_json["scenes"] if sc["type"] == "broll"]
+        total = 1 + len(broll_scenes)
+        sem = asyncio.Semaphore(settings.pipeline_concurrency)
+
+        async def gen_avatar() -> str:
+            await publish(ctx.redis, video_id, "progress", {"step": f"component_1_of_{total}"})
+            return await cache.blob(
+                "fabric", [face_bytes, narration_bytes, "480p"], "mp4",
+                lambda: _fabric_bytes(str(face_path), narration_path),
+            )
+
+        results = await asyncio.gather(
+            gen_avatar(),
+            *[_gen_broll(ctx, sc, i, total, video_id, sem)
+              for i, sc in enumerate(broll_scenes)],
+        )
+        avatar_path = results[0]
+        brolls = [b for b in results[1:] if b is not None]
+
+        out = str(tmp / "fast.mp4")
+        await media.compose_timeline(avatar_path, brolls, cues, out, settings.caption_font)
+        final_bytes = Path(out).read_bytes()  # noqa: ASYNC240
+        cache.save_render(video_id, "mp4", final_bytes)  # final video, friendly local name
+        await ctx.storage.put(fast_key, final_bytes, "video/mp4")
+
+    async with ctx.session_factory() as s:
+        v = (await s.execute(select(Video).where(Video.id == video_id))).scalar_one()
+        v.status_fast = "ready"
+        v.assets = {**v.assets, "fast": fast_key}
+        v.script = script_json
+        await s.commit()
+
+    await publish(ctx.redis, video_id, "fast_ready", {
+        "fast_url": await ctx.storage.presign_get(fast_key),
+    })
+
+
+HANDLERS = {"avatar_prep": handle_avatar_prep, "fast_generate": handle_fast_generate}
+
+
+async def process_one(ctx: WorkerContext) -> bool:
+    msg = await read_next(ctx.redis, consumer=ctx.consumer)
+    if msg is None:
+        return False
+    async with ctx.session_factory() as s:
+        job = (
+            await s.execute(select(Job).where(Job.id == msg["job_id"]))
+        ).scalar_one_or_none()
+        if job is None:
+            print(f"orphan stream entry, skipping job_id={msg['job_id']}")
+            await ack(ctx.redis, msg["lane"], msg["msg_id"])
+            return True
+        job.status = "running"
+        await s.commit()
+        kind, payload = job.kind, dict(job.payload)
+    try:
+        await HANDLERS[kind](ctx, payload)
+        status = "done"
+    except Exception as exc:  # worker must survive any job failure
+        print(f"job {msg['job_id']} ({kind}) failed: {_fmt_exc(exc)}")
+        status = "failed"
+        entity_id = payload.get("avatar_id") or payload.get("video_id") or ""
+        async with ctx.session_factory() as s:
+            if "avatar_id" in payload:
+                avatar = (
+                    await s.execute(select(Avatar).where(Avatar.id == payload["avatar_id"]))
+                ).scalar_one_or_none()
+                if avatar is not None:
+                    avatar.status = "failed"
+            elif "video_id" in payload:
+                vid = (
+                    await s.execute(select(Video).where(Video.id == payload["video_id"]))
+                ).scalar_one_or_none()
+                if vid is not None:
+                    vid.status_fast = "failed"
+            await s.commit()
+        if entity_id:
+            await publish(ctx.redis, entity_id, "failed", {"kind": kind})
+    async with ctx.session_factory() as s:
+        job = (await s.execute(select(Job).where(Job.id == msg["job_id"]))).scalar_one()
+        job.status = status
+        await s.commit()
+    await ack(ctx.redis, msg["lane"], msg["msg_id"])
+    return True
+
+
+async def main() -> None:
+    settings = get_settings()
+    engine = make_engine()
+    await init_db(engine)
+    storage = S3Storage(settings)
+    await storage.ensure_bucket()
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    await ensure_groups(redis)
+    ctx = WorkerContext(
+        session_factory=make_session_factory(engine), storage=storage,
+        redis=redis, consumer=f"worker-{socket.gethostname()}-{os.getpid()}",
+    )
+    print(f"worker started as {ctx.consumer}")
+    while True:
+        try:
+            worked = await process_one(ctx)
+        except Exception as exc:
+            print(f"worker loop error: {exc!r}")
+            await asyncio.sleep(1.0)
+            continue
+        if not worked:
+            await asyncio.sleep(0.2)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

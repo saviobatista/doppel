@@ -2,13 +2,13 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 
 from doppel_api.deps import get_device, get_redis, get_session, get_storage
-from doppel_api.events import sse_format, subscription
+from doppel_api.events import HEARTBEAT, sse_comment, sse_format, subscription
 from doppel_api.models import Avatar, Device, Video
 from doppel_api.queue import enqueue
 
@@ -83,6 +83,9 @@ async def video_events(
             if snap.status_fast in ("ready", "failed"):
                 return
             async for event, payload in events_iter:
+                if event == HEARTBEAT:
+                    yield sse_comment()
+                    continue
                 yield sse_format(event, payload)
                 if event in ("fast_ready", "failed"):
                     return
@@ -139,6 +142,29 @@ async def gallery(
             "fast_url": await storage.presign_get(key),
         })
     return {"videos": videos}
+
+
+@router.get("/v1/videos/{video_id}/download")
+async def download_video(
+    video_id: str,
+    device: Device = Depends(get_device),
+    session=Depends(get_session),
+    storage=Depends(get_storage),
+) -> Response:
+    # The browser cannot read the floci-hosted object cross-origin (no CORS), so
+    # the api serves the bytes itself (it is CORS-allowed) as an attachment.
+    result = await session.execute(
+        select(Video).where(Video.id == video_id, Video.device_id == device.id)
+    )
+    video = result.scalar_one_or_none()
+    if video is None or "fast" not in video.assets:
+        raise HTTPException(status_code=404)
+    data = await storage.get(video.assets["fast"])
+    return Response(
+        content=data,
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'attachment; filename="doppel-{video_id}.mp4"'},
+    )
 
 
 @router.delete("/v1/me", status_code=204)

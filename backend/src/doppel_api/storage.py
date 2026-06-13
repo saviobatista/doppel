@@ -37,6 +37,13 @@ class S3Storage:
         self._client = boto3.client(
             "s3", endpoint_url=settings.s3_endpoint, region_name=settings.s3_region
         )
+        # Presigned URLs are opened by the browser, which cannot reach the
+        # internal compose hostname (e.g. floci:4566). Sign them against a
+        # browser-reachable public endpoint when one is configured.
+        presign_endpoint = settings.s3_public_endpoint or settings.s3_endpoint
+        self._presign_client = boto3.client(
+            "s3", endpoint_url=presign_endpoint, region_name=settings.s3_region
+        )
 
     async def ensure_bucket(self) -> None:
         def _ensure() -> None:
@@ -64,6 +71,6 @@ class S3Storage:
         return await anyio.to_thread.run_sync(_get)
 
     async def presign_get(self, key: str, expires_in: int = 3600) -> str:
-        return self._client.generate_presigned_url(
+        return self._presign_client.generate_presigned_url(
             "get_object", Params={"Bucket": self._bucket, "Key": key}, ExpiresIn=expires_in
         )
