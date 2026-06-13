@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
 from doppel_api.deps import get_device, get_redis, get_session, get_storage
-from doppel_api.events import publish, sse_format, subscription
+from doppel_api.events import HEARTBEAT, publish, sse_comment, sse_format, subscription
 from doppel_api.models import Avatar, Device
 from doppel_api.queue import enqueue
 
@@ -100,6 +100,9 @@ async def avatar_events(
             if snap.status in ("ready", "failed"):
                 return
             async for event, payload in events_iter:
+                if event == HEARTBEAT:
+                    yield sse_comment()
+                    continue
                 yield sse_format(event, payload)
                 if event in ("hello_ready", "failed"):
                     return
