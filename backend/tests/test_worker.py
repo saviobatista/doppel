@@ -7,8 +7,8 @@ from doppel_api.db import init_db, make_session_factory
 from doppel_api.models import Avatar, Device, Job, Video
 from doppel_api.queue import ensure_groups, enqueue
 from doppel_api.storage import MemoryStorage
-from workers import stub_worker
-from workers.stub_worker import WorkerContext, process_one
+from workers import worker
+from workers.worker import WorkerContext, process_one
 
 
 @pytest.fixture
@@ -18,10 +18,10 @@ async def ctx(monkeypatch):
     redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
     await ensure_groups(redis)
     monkeypatch.setattr(
-        stub_worker, "make_stub_video",
+        worker, "make_stub_video",
         lambda path, seconds, label: path.write_bytes(b"MP4" + label.encode()),
     )
-    monkeypatch.setattr(stub_worker, "STEP_DELAY", 0)
+    monkeypatch.setattr(worker, "STEP_DELAY", 0)
     yield WorkerContext(
         session_factory=make_session_factory(engine),
         storage=MemoryStorage(),
@@ -78,7 +78,7 @@ async def test_avatar_prep_produces_hello_and_feedback(ctx, monkeypatch):
     async def capture(redis, entity_id, event, data):
         events.append((event, data))
 
-    monkeypatch.setattr(stub_worker, "publish", capture)
+    monkeypatch.setattr(worker, "publish", capture)
     assert await process_one(ctx) is True
 
     async with ctx.session_factory() as s:
@@ -102,7 +102,7 @@ async def test_fast_generate_produces_video_and_script(ctx, monkeypatch):
     async def capture(redis, entity_id, event, data):
         events.append((event, data))
 
-    monkeypatch.setattr(stub_worker, "publish", capture)
+    monkeypatch.setattr(worker, "publish", capture)
     assert await process_one(ctx) is True
 
     async with ctx.session_factory() as s:
@@ -129,14 +129,14 @@ async def test_handler_failure_marks_entity_failed_and_worker_survives(ctx, monk
     def boom(path, seconds, label):
         raise RuntimeError("render exploded")
 
-    monkeypatch.setattr(stub_worker, "make_stub_video", boom)
+    monkeypatch.setattr(worker, "make_stub_video", boom)
 
     events: list[tuple[str, dict]] = []
 
     async def capture(redis, entity_id, event, data):
         events.append((event, data))
 
-    monkeypatch.setattr(stub_worker, "publish", capture)
+    monkeypatch.setattr(worker, "publish", capture)
 
     assert await process_one(ctx) is True
 
