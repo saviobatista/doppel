@@ -67,8 +67,12 @@ const SCENES: Record<State, (ctx: AppCtx) => Promise<State>> = {
 async function fadeTo(next: () => Promise<State>): Promise<State> {
   stage.classList.add("faded");
   await new Promise((r) => setTimeout(r, 600));
+  // scenes set their innerHTML synchronously before their first await, so the
+  // new DOM is in place here; paint it one frame while still faded, then fade in.
+  const p = next();
+  await new Promise((r) => requestAnimationFrame(r));
   stage.classList.remove("faded");
-  return next();
+  return p;
 }
 
 async function loop(): Promise<void> {
@@ -76,9 +80,23 @@ async function loop(): Promise<void> {
   const machine = new Machine();
   for (;;) {
     const scene = SCENES[machine.state];
-    const next = await fadeTo(() => scene(ctx));
-    machine.go(next);
+    let next: State;
+    try {
+      next = await fadeTo(() => scene(ctx));
+    } catch (err) {
+      console.error("scene error", err);
+      next = "error";
+    }
+    try {
+      machine.go(next);
+    } catch (err) {
+      console.error("illegal transition", err);
+      machine.state = "error";
+    }
   }
 }
 
-loop();
+loop().catch((err) => {
+  console.error("fatal", err);
+  stage.innerHTML = `<p class="reading-text">${STR.genericError}</p>`;
+});

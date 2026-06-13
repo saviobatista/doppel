@@ -25,7 +25,9 @@ export async function run(ctx: AppCtx): Promise<State> {
         resolve();
       }
       if (event === "failed") { failed = true; resolve(); }
-    }).then(resolve);
+    })
+      .then(resolve)
+      .catch(() => { failed = true; resolve(); });
   });
   gears.stop();
   return failed || !ctx.fastUrl ? "error" : "reveal";

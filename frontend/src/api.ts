@@ -28,7 +28,8 @@ export function startAvatarUpload(stream: MediaStream): AvatarUpload {
   const recorder = new MediaRecorder(stream, { mimeType: mime });
 
   let resolveId!: (id: string) => void;
-  const avatarId = new Promise<string>((r) => (resolveId = r));
+  let rejectId!: (e: Error) => void;
+  const avatarId = new Promise<string>((res, rej) => { resolveId = res; rejectId = rej; });
   let resolveDone!: () => void;
   const done = new Promise<void>((r) => (resolveDone = r));
 
@@ -44,6 +45,10 @@ export function startAvatarUpload(stream: MediaStream): AvatarUpload {
       resolveDone();
     }
   };
+  ws.onerror = () => rejectId(new Error("websocket error"));
+  ws.onclose = (ev) => {
+    if (!ev.wasClean) rejectId(new Error("websocket closed unexpectedly"));
+  };
   recorder.ondataavailable = async (ev) => {
     if (ev.data.size > 0 && ws.readyState === WebSocket.OPEN) {
       ws.send(await ev.data.arrayBuffer());
@@ -51,7 +56,9 @@ export function startAvatarUpload(stream: MediaStream): AvatarUpload {
   };
   recorder.onstop = () => {
     // garante flush do ultimo chunk antes do done
-    setTimeout(() => ws.send(JSON.stringify({ done: true })), 300);
+    setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ done: true }));
+    }, 300);
   };
 
   return {
