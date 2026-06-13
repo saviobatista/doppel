@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +13,11 @@ class Settings(BaseSettings):
     s3_bucket: str = "doppel-media"
     s3_region: str = "us-east-1"
     cors_origins: str = "http://localhost:5173"
+
+    @field_validator("s3_endpoint", mode="before")
+    @classmethod
+    def _empty_str_to_none(cls, v: str | None) -> str | None:
+        return None if v == "" else v
 
 
 @lru_cache
