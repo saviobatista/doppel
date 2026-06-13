@@ -11,6 +11,8 @@ from doppel_api.queue import enqueue
 
 router = APIRouter()
 
+MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+
 
 @router.websocket("/v1/avatars/stream")
 async def avatar_stream(ws: WebSocket):
@@ -35,9 +37,14 @@ async def avatar_stream(ws: WebSocket):
         await ws.send_text(json.dumps({"avatar_id": avatar.id}))
 
         chunks: list[bytes] = []
+        total = 0
         while True:
             message = await ws.receive()
             if message.get("bytes") is not None:
+                total += len(message["bytes"])
+                if total > MAX_UPLOAD_BYTES:
+                    await ws.close(code=1009)  # message too big
+                    return  # avatar stays in recording, same as abandoned
                 chunks.append(message["bytes"])
                 continue
             if message.get("text"):
@@ -75,6 +82,8 @@ async def avatar_events(
     )
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404)
+    # release the request-scoped connection; the stream uses its own short session
+    await session.rollback()
 
     async def stream():
         # subscribe BEFORE reading the snapshot: no lost-event window
