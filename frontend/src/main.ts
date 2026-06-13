@@ -1,5 +1,5 @@
 import "./style.css";
-import { ensureSession } from "./api";
+import { ensureSession, fetchGallery } from "./api";
 import { Machine, type State } from "./machine";
 import { STR } from "./strings";
 import * as briefing from "./scenes/briefing";
@@ -78,6 +78,14 @@ async function fadeTo(next: () => Promise<State>): Promise<State> {
 async function loop(): Promise<void> {
   await ensureSession();
   const machine = new Machine();
+  // On page entry, a visitor with an empty gallery skips the landing and goes
+  // straight into the experience. Returning visitors (gallery has videos) still
+  // see the idle screen to choose between a new video and their gallery.
+  try {
+    if ((await fetchGallery()).length === 0) machine.go("permission");
+  } catch (err) {
+    console.error("gallery peek failed, showing landing", err);
+  }
   for (;;) {
     const scene = SCENES[machine.state];
     let next: State;
