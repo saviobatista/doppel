@@ -118,6 +118,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "redis>=5.2",
     "boto3>=1.35",
+    "anyio>=4.0",
     "pydantic-settings>=2.6",
     "python-multipart>=0.0.12",
 ]
@@ -138,12 +139,15 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+select = ["E", "F", "UP", "ASYNC", "RUF"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/doppel_api"]
+packages = ["src/doppel_api", "workers"]
 ```
 
 Criar `backend/src/doppel_api/__init__.py` e `backend/workers/__init__.py` vazios.

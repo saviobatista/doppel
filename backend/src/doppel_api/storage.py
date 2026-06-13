@@ -2,6 +2,7 @@ from typing import Protocol
 
 import anyio
 import boto3
+from botocore.exceptions import ClientError
 
 from doppel_api.config import Settings
 
@@ -10,7 +11,7 @@ class Storage(Protocol):
     async def ensure_bucket(self) -> None: ...
     async def put(self, key: str, data: bytes, content_type: str) -> None: ...
     async def get(self, key: str) -> bytes: ...
-    async def presign_get(self, key: str) -> str: ...
+    async def presign_get(self, key: str, expires_in: int = 3600) -> str: ...
 
 
 class MemoryStorage:
@@ -26,7 +27,7 @@ class MemoryStorage:
     async def get(self, key: str) -> bytes:
         return self._objects[key]
 
-    async def presign_get(self, key: str) -> str:
+    async def presign_get(self, key: str, expires_in: int = 3600) -> str:
         return f"memory://{key}"
 
 
@@ -41,8 +42,11 @@ class S3Storage:
         def _ensure() -> None:
             try:
                 self._client.head_bucket(Bucket=self._bucket)
-            except Exception:
-                self._client.create_bucket(Bucket=self._bucket)
+            except ClientError as e:
+                if e.response["Error"]["Code"] in ("404", "NoSuchBucket"):
+                    self._client.create_bucket(Bucket=self._bucket)
+                else:
+                    raise
 
         await anyio.to_thread.run_sync(_ensure)
 
@@ -59,9 +63,7 @@ class S3Storage:
 
         return await anyio.to_thread.run_sync(_get)
 
-    async def presign_get(self, key: str) -> str:
-        return await anyio.to_thread.run_sync(
-            lambda: self._client.generate_presigned_url(
-                "get_object", Params={"Bucket": self._bucket, "Key": key}, ExpiresIn=3600
-            )
+    async def presign_get(self, key: str, expires_in: int = 3600) -> str:
+        return self._client.generate_presigned_url(
+            "get_object", Params={"Bucket": self._bucket, "Key": key}, ExpiresIn=expires_in
         )
