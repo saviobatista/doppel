@@ -20,6 +20,7 @@ export const STR = {
   } as Record<string, string>,
   thumbsUp: "Curti",
   thumbsDown: "Não curti",
+  download: "Baixar",
   newVideo: "Criar outro vídeo",
   deleteMe: "Apagar meus dados",
   genericError: "Algo deu errado. Vamos tentar de novo?",
