@@ -63,7 +63,7 @@ async def test_tts_with_timestamps_decodes_audio_and_builds_cues(monkeypatch):
         character_end_times_seconds=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
     )
     resp = types.SimpleNamespace(
-        audio_base64=base64.b64encode(b"MP3").decode(), alignment=align
+        audio_base_64=base64.b64encode(b"MP3").decode(), alignment=align
     )
 
     class FakeTTS:

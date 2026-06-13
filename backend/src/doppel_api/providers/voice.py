@@ -65,7 +65,7 @@ async def tts_with_timestamps(voice_id: str, text: str) -> tuple[bytes, list[Cap
         resp = _client().text_to_speech.convert_with_timestamps(
             voice_id=voice_id, text=text, model_id=get_settings().elevenlabs_model
         )
-        audio = base64.b64decode(resp.audio_base64)
+        audio = base64.b64decode(resp.audio_base_64)  # SDK field is audio_base_64, not audio_base64
         a = resp.alignment
         cues = group_alignment_to_words(
             a.characters, a.character_start_times_seconds, a.character_end_times_seconds
