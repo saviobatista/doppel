@@ -1,15 +1,13 @@
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from doppel_api.config import get_settings
 from doppel_api.db import init_db, make_engine, make_session_factory
-from doppel_api.deps import get_device
-from doppel_api.models import Device
-from doppel_api.routes import avatars, sessions
+from doppel_api.routes import avatars, sessions, videos
 from doppel_api.storage import S3Storage, Storage
 
 
@@ -54,9 +52,6 @@ def create_app(
     )
     app.include_router(sessions.router)
     app.include_router(avatars.router)
-
-    @app.get("/v1/gallery")
-    async def gallery_stub(device: Device = Depends(get_device)) -> dict:
-        return {"videos": []}
+    app.include_router(videos.router)
 
     return app
