@@ -1,5 +1,5 @@
 import "./style.css";
-import { ensureSession, fetchGallery } from "./api";
+import { ensureSession } from "./api";
 import { Machine, type State } from "./machine";
 import { STR } from "./strings";
 import * as briefing from "./scenes/briefing";
@@ -75,17 +75,19 @@ async function fadeTo(next: () => Promise<State>): Promise<State> {
   return p;
 }
 
+const SEEN_KEY = "doppel_seen";
+
 async function loop(): Promise<void> {
   await ensureSession();
   const machine = new Machine();
-  // On page entry, a visitor with an empty gallery skips the landing and goes
-  // straight into the experience. Returning visitors (gallery has videos) still
-  // see the idle screen to choose between a new video and their gallery.
-  try {
-    if ((await fetchGallery()).length === 0) machine.go("permission");
-  } catch (err) {
-    console.error("gallery peek failed, showing landing", err);
-  }
+  // A genuinely first-time visitor dives straight into the experience instead of
+  // seeing the landing. Anyone who has been here before sees the landing - this
+  // includes returning visitors and, crucially, someone who just deleted their
+  // data: deleteMe() drops the device token but not this flag, so a fresh empty
+  // gallery after a delete is not mistaken for a brand-new visitor.
+  const firstVisit = !localStorage.getItem(SEEN_KEY);
+  localStorage.setItem(SEEN_KEY, "1");
+  if (firstVisit) machine.go("permission");
   for (;;) {
     const scene = SCENES[machine.state];
     let next: State;
