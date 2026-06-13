@@ -1,4 +1,21 @@
+import asyncio
+
+import pytest
+
 from doppel_api.providers import video
+
+
+async def test_generate_call_times_out_instead_of_hanging(monkeypatch):
+    # A locked/down fal must not pin the worker: the call fails fast.
+    monkeypatch.setattr(video, "GENERATE_TIMEOUT", 0.05)
+
+    async def hang(model, arguments):
+        await asyncio.sleep(5)
+        return {"video": {"url": "never"}}
+
+    monkeypatch.setattr(video.fal_client, "subscribe_async", hang)
+    with pytest.raises(asyncio.TimeoutError):
+        await video.talking("i", "a")
 
 
 async def test_upload_returns_url(monkeypatch):
