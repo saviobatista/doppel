@@ -18,7 +18,13 @@ export async function run(ctx: AppCtx): Promise<State> {
     <button id="done">${STR.readingDone}</button>`;
 
   const upload = startAvatarUpload(ctx.stream!);
-  ctx.avatarId = await upload.avatarId;
+  try {
+    ctx.avatarId = await upload.avatarId;
+  } catch {
+    ctx.stream!.getTracks().forEach((t) => t.stop());
+    ctx.stream = null;
+    return "error";
+  }
 
   await new Promise<void>((resolve) => {
     stage.querySelector("#done")!.addEventListener("click", () => resolve(), { once: true });

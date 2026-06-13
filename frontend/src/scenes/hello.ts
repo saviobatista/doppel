@@ -13,6 +13,7 @@ export function playerScene(ctx: AppCtx, url: string): Promise<void> {
   return new Promise((resolve) => {
     video.addEventListener("ended", () => resolve(), { once: true });
     video.addEventListener("error", () => resolve(), { once: true });
+    video.play().catch(() => resolve());
   });
 }
 

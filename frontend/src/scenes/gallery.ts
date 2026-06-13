@@ -5,6 +5,7 @@ import { STR } from "../strings";
 
 export async function run(ctx: AppCtx): Promise<State> {
   const stage = ctx.stage;
+  stage.innerHTML = "";
   const items = await fetchGallery();
   stage.innerHTML = `
     <div class="gallery-grid">

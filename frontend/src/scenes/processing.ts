@@ -12,13 +12,20 @@ export async function run(ctx: AppCtx): Promise<State> {
   let failed = false;
   await new Promise<void>((resolve) => {
     consumeSse(`/v1/avatars/${ctx.avatarId}/events`, (event, data) => {
+      if (event === "status" && data.hello_url) {
+        ctx.helloUrl = data.hello_url as string;
+        ctx.feedbackUrl = (data.feedback_url as string) ?? null;
+        resolve();
+      }
       if (event === "hello_ready") {
         ctx.helloUrl = data.hello_url as string;
         ctx.feedbackUrl = (data.feedback_url as string) ?? null;
         resolve();
       }
       if (event === "failed") { failed = true; resolve(); }
-    }).then(resolve);
+    })
+      .then(resolve)
+      .catch(() => { failed = true; resolve(); });
   });
   gears.stop();
   return failed || !ctx.helloUrl ? "error" : "hello";
