@@ -9,7 +9,7 @@ from doppel_api.config import get_settings
 from doppel_api.db import init_db, make_engine, make_session_factory
 from doppel_api.deps import get_device
 from doppel_api.models import Device
-from doppel_api.routes import sessions
+from doppel_api.routes import avatars, sessions
 from doppel_api.storage import S3Storage, Storage
 
 
@@ -53,6 +53,7 @@ def create_app(
         allow_headers=["*"],
     )
     app.include_router(sessions.router)
+    app.include_router(avatars.router)
 
     @app.get("/v1/gallery")
     async def gallery_stub(device: Device = Depends(get_device)) -> dict:
