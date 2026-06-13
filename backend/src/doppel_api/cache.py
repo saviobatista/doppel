@@ -93,3 +93,13 @@ def put_blob(namespace: str, parts: list, ext: str, data: bytes) -> str:
     if path.exists():
         return str(path)
     return _safe_write(path, data, ext)
+
+
+def save_render(name: str, ext: str, data: bytes) -> str:
+    """Save a final deliverable under renders/ with a human-friendly name.
+
+    Unlike the content-addressed helpers, this uses the given name verbatim and
+    overwrites, so the user can find the finished videos on disk by name.
+    """
+    path = Path(get_settings().cache_dir) / "renders" / f"{name}.{ext}"
+    return _safe_write(path, data, ext)

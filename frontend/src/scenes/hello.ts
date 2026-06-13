@@ -9,11 +9,14 @@ export function playerScene(ctx: AppCtx, url: string): Promise<void> {
   video.src = url;
   video.playsInline = true;
   video.autoplay = true;
+  video.controls = true; // browsers block autoplay-with-audio; let the user play/replay
   stage.appendChild(video);
   return new Promise((resolve) => {
     video.addEventListener("ended", () => resolve(), { once: true });
     video.addEventListener("error", () => resolve(), { once: true });
-    video.play().catch(() => resolve());
+    // Try to autoplay; if the browser blocks it, do NOT skip ahead - the user
+    // presses play via the controls and we advance only when the video ends.
+    video.play().catch(() => {});
   });
 }
 

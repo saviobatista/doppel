@@ -82,7 +82,10 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
             lambda: voice.clone(ref_path, name=f"doppel-{avatar_id[:8]}"),
         )
         model = settings.elevenlabs_model
-        for line, key in ((HELLO_LINE, hello_key), (FEEDBACK_LINE, feedback_key)):
+        for line, key, name in (
+            (HELLO_LINE, hello_key, f"{avatar_id}-hello"),
+            (FEEDBACK_LINE, feedback_key, f"{avatar_id}-feedback"),
+        ):
             audio_path = await cache.blob(
                 "tts", [voice_id, line, model], "mp3",
                 lambda v=voice_id, ln=line: voice.tts(v, ln),
@@ -92,7 +95,9 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
                 "fabric", [face_bytes, audio_bytes, "480p"], "mp4",
                 lambda fp=face_path, ap=audio_path: _fabric_bytes(fp, ap),
             )
-            await ctx.storage.put(key, Path(talk_path).read_bytes(), "video/mp4")  # noqa: ASYNC240
+            talk_bytes = Path(talk_path).read_bytes()  # noqa: ASYNC240
+            cache.save_render(name, "mp4", talk_bytes)  # human-friendly local copy
+            await ctx.storage.put(key, talk_bytes, "video/mp4")
 
     async with ctx.session_factory() as s:
         avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
@@ -199,7 +204,9 @@ async def handle_fast_generate(ctx: "WorkerContext", payload: dict) -> None:
 
         out = str(tmp / "fast.mp4")
         await media.compose_timeline(avatar_path, brolls, cues, out, settings.caption_font)
-        await ctx.storage.put(fast_key, Path(out).read_bytes(), "video/mp4")  # noqa: ASYNC240
+        final_bytes = Path(out).read_bytes()  # noqa: ASYNC240
+        cache.save_render(video_id, "mp4", final_bytes)  # final video, friendly local name
+        await ctx.storage.put(fast_key, final_bytes, "video/mp4")
 
     async with ctx.session_factory() as s:
         v = (await s.execute(select(Video).where(Video.id == video_id))).scalar_one()

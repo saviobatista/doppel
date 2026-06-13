@@ -90,3 +90,15 @@ def test_put_blob_writes_and_is_idempotent(tmp_path, monkeypatch):
     assert p2 == p
     with open(p2, "rb") as f:
         assert f.read() == b"REC"  # not overwritten on hit
+
+
+def test_save_render_friendly_name_and_overwrites(tmp_path, monkeypatch):
+    monkeypatch.setattr(config.get_settings(), "cache_dir", str(tmp_path), raising=False)
+    p = cache.save_render("vid123", "mp4", b"V1")
+    assert p.endswith("renders/vid123.mp4")
+    with open(p, "rb") as f:
+        assert f.read() == b"V1"
+    p2 = cache.save_render("vid123", "mp4", b"V2")  # latest wins
+    assert p2 == p
+    with open(p2, "rb") as f:
+        assert f.read() == b"V2"
