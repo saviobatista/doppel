@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     pipeline_concurrency: int = Field(
         default=4, validation_alias=AliasChoices("PIPELINE_CONCURRENCY")
     )
+    cache_dir: str = Field(default="cache", validation_alias=AliasChoices("CACHE_DIR"))
+    video_target_seconds: int = Field(
+        default=10, validation_alias=AliasChoices("VIDEO_TARGET_SECONDS")
+    )
 
     @field_validator("s3_endpoint", mode="before")
     @classmethod
