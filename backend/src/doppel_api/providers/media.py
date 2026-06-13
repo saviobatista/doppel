@@ -49,14 +49,19 @@ def _run_ffmpeg(args: list[str]) -> None:
         raise RuntimeError(f"ffmpeg failed ({e.returncode}): {tail!r}") from e
 
 
+# -fflags +bitexact and -map_metadata -1 strip ffmpeg version/metadata so the
+# extracted bytes are identical across runs - that stability is what lets the
+# content-addressed cache (keyed on these bytes) actually hit on a re-run.
 async def extract_frame(src_path: str, out_path: str) -> str:
-    args = ["-ss", "1", "-i", src_path, "-frames:v", "1", "-q:v", "2", out_path]
+    args = ["-fflags", "+bitexact", "-ss", "1", "-i", src_path,
+            "-frames:v", "1", "-q:v", "2", "-map_metadata", "-1", out_path]
     await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
     return out_path
 
 
 async def extract_audio(src_path: str, out_path: str) -> str:
-    args = ["-i", src_path, "-vn", "-ac", "1", "-ar", "44100", out_path]
+    args = ["-fflags", "+bitexact", "-i", src_path, "-vn", "-ac", "1", "-ar", "44100",
+            "-map_metadata", "-1", out_path]
     await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
     return out_path
 
