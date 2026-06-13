@@ -30,3 +30,5 @@ async def test_create_all_and_insert_graph():
         job = (await s.execute(select(Job))).scalar_one()
         assert job.status == "queued"
         assert job.payload["avatar_id"] == av.id
+        assert job.timings == {}
+        assert av.created_at.tzinfo is not None
