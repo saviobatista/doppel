@@ -19,10 +19,13 @@ def create_app(
     redis=None,
     run_startup: bool = True,
 ) -> FastAPI:
+    """App factory. Injected deps are for tests and only honored with run_startup=False;
+    with run_startup=True the lifespan wires real deps and overwrites app.state."""
     settings = get_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        engine = None
         if run_startup:
             engine = make_engine()
             app.state.session_factory = make_session_factory(engine)
@@ -31,6 +34,9 @@ def create_app(
             await init_db(engine)
             await app.state.storage.ensure_bucket()
         yield
+        if engine is not None:
+            await app.state.redis.aclose()
+            await engine.dispose()
 
     app = FastAPI(title="doppel-api", lifespan=lifespan)
     if session_factory is not None:
@@ -42,7 +48,7 @@ def create_app(
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.cors_origins.split(","),
+        allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_methods=["*"],
         allow_headers=["*"],
     )
