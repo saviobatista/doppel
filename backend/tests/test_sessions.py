@@ -15,3 +15,23 @@ async def test_auth_accepts_valid_token(client, device_token):
     resp = await client.get("/v1/gallery", headers={"X-Device-Token": device_token})
     assert resp.status_code == 200
     assert resp.json() == {"videos": []}
+
+
+async def test_auth_rejects_unknown_token(client):
+    resp = await client.get("/v1/gallery", headers={"X-Device-Token": "nope"})
+    assert resp.status_code == 401
+
+
+async def test_auth_rejects_deleted_device(app, client, device_token):
+    from datetime import UTC, datetime
+
+    from sqlalchemy import select
+
+    from doppel_api.models import Device
+
+    async with app.state.session_factory() as s:
+        device = (await s.execute(select(Device))).scalar_one()
+        device.deleted_at = datetime.now(UTC)
+        await s.commit()
+    resp = await client.get("/v1/gallery", headers={"X-Device-Token": device_token})
+    assert resp.status_code == 401
