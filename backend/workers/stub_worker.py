@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from doppel_api.config import get_settings
 from doppel_api.db import init_db, make_engine, make_session_factory
-from doppel_api.events import publish
+from doppel_api.events import publish  # tests rebind this name; keep it a module global
 from doppel_api.models import Avatar, Job, Video
 from doppel_api.queue import ack, ensure_groups, read_next
 from doppel_api.storage import S3Storage, Storage
@@ -28,8 +28,14 @@ class WorkerContext:
     consumer: str
 
 
+STEP_DELAY = 0.5
+
+
 def make_stub_video(path: Path, seconds: int, label: str) -> None:
-    """Generate a 9:16 mp4 with centered text and audio tone. Requires ffmpeg in PATH."""
+    """Gera um mp4 9:16 com texto central e tom de audio. Requer ffmpeg no PATH.
+
+    label e interpolado no filtro drawtext: nao pode conter aspas simples ou ':'.
+    """
     cmd = [
         "ffmpeg", "-y",
         "-f", "lavfi", "-i", f"testsrc2=size=540x960:rate=30:duration={seconds}",
@@ -39,7 +45,11 @@ def make_stub_video(path: Path, seconds: int, label: str) -> None:
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
         str(path),
     ]
-    subprocess.run(cmd, check=True, capture_output=True)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True)
+    except subprocess.CalledProcessError as e:
+        stderr_tail = (e.stderr or b"")[-2000:]
+        raise RuntimeError(f"ffmpeg failed ({e.returncode}): {stderr_tail!r}") from e
 
 
 async def _render_and_upload(ctx: WorkerContext, key: str, seconds: int, label: str) -> None:
@@ -70,10 +80,10 @@ async def handle_avatar_prep(ctx: WorkerContext, payload: dict) -> None:
 async def handle_fast_generate(ctx: WorkerContext, payload: dict) -> None:
     video_id = payload["video_id"]
     await publish(ctx.redis, video_id, "progress", {"step": "scripting"})
-    await asyncio.sleep(0.5)  # artificial latency visible in UI
+    await asyncio.sleep(STEP_DELAY)  # artificial latency visible in UI
     for n in (1, 2, 3):
         await publish(ctx.redis, video_id, "progress", {"step": f"component_{n}_of_3"})
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(STEP_DELAY)
     key = f"videos/{video_id}/fast.mp4"
     await _render_and_upload(ctx, key, 30, "DOPPEL FAST STUB")
     async with ctx.session_factory() as s:
@@ -112,6 +122,20 @@ async def process_one(ctx: WorkerContext) -> bool:
         print(f"job {msg['job_id']} ({kind}) failed: {exc!r}")
         status = "failed"
         entity_id = payload.get("avatar_id") or payload.get("video_id") or ""
+        async with ctx.session_factory() as s:
+            if "avatar_id" in payload:
+                avatar = (
+                    await s.execute(select(Avatar).where(Avatar.id == payload["avatar_id"]))
+                ).scalar_one_or_none()
+                if avatar is not None:
+                    avatar.status = "failed"
+            elif "video_id" in payload:
+                video = (
+                    await s.execute(select(Video).where(Video.id == payload["video_id"]))
+                ).scalar_one_or_none()
+                if video is not None:
+                    video.status_fast = "failed"
+            await s.commit()
         if entity_id:
             await publish(ctx.redis, entity_id, "failed", {"kind": kind})
     async with ctx.session_factory() as s:
@@ -136,7 +160,12 @@ async def main() -> None:
     )
     print(f"stub worker started as {ctx.consumer}")
     while True:
-        worked = await process_one(ctx)
+        try:
+            worked = await process_one(ctx)
+        except Exception as exc:
+            print(f"worker loop error: {exc!r}")
+            await asyncio.sleep(1.0)
+            continue
         if not worked:
             await asyncio.sleep(0.2)
 
