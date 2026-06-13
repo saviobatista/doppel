@@ -18,6 +18,13 @@
 - Frontend roda com `npm run dev` no host (proxy para a api do compose); container web/Caddy entra no M1.
 - Validação de rosto/áudio na gravação (MediaPipe) entra no M1; M0 grava sem validar.
 
+**Desvios de execução** (contratos atualizados em review; os blocos de código abaixo nas Tasks 5-8 representam a intenção original e os commits são a fonte da verdade):
+- Task 1: pyproject ganhou `workers` no hatch packages, `anyio` explícito, ruff lint select, `.python-version` 3.12.
+- Task 3: colunas datetime usam `TZDateTime` (TypeDecorator) para paridade tz-aware sqlite/postgres.
+- Task 5 (CONTRATO): `enqueue()` agora COMMITA a session antes do `xadd` (worker nunca vê job_id sem row); lanes inválidas levantam ValueError; streams com maxlen 10k. `subscribe()` virou `subscription()` (asynccontextmanager com subscribe eager no enter e aclose no exit): rotas SSE devem subscrever ANTES de ler o snapshot do banco.
+- Task 6/8 (decorrência): handlers fazem mutações de estado antes de chamar `enqueue` (que commita tudo) e não chamam `session.commit()` redundante; SSE re-lê o snapshot dentro de `subscription()`.
+- Task 7 (decorrência): worker trata job row ausente como log+ack+skip (defesa contra entradas órfãs) e usa consumer name único por processo.
+
 ---
 
 ## File Structure
