@@ -56,3 +56,22 @@ async def test_extract_frame_integration(tmp_path):
     assert out.endswith("frame.png")
     import os
     assert os.path.getsize(out) > 0  # noqa: ASYNC240
+
+
+@pytest.mark.skipif(media.ffmpeg_missing(), reason="ffmpeg not installed")
+async def test_extract_is_deterministic(tmp_path):
+    # bit-exact extraction: same source -> identical bytes, so cache keys are stable
+    import subprocess
+    src = str(tmp_path / "src.mp4")
+    subprocess.run(  # noqa: ASYNC221
+        ["ffmpeg", "-y", "-f", "lavfi", "-i", "testsrc2=size=540x960:rate=30:duration=2",
+         "-f", "lavfi", "-i", "sine=frequency=200:duration=2",
+         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", src],
+        check=True, capture_output=True,
+    )
+    f1 = await media.extract_frame(src, str(tmp_path / "f1.png"))
+    f2 = await media.extract_frame(src, str(tmp_path / "f2.png"))
+    a1 = await media.extract_audio(src, str(tmp_path / "a1.wav"))
+    a2 = await media.extract_audio(src, str(tmp_path / "a2.wav"))
+    assert open(f1, "rb").read() == open(f2, "rb").read()  # noqa: ASYNC230
+    assert open(a1, "rb").read() == open(a2, "rb").read()  # noqa: ASYNC230
