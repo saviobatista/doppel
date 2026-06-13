@@ -18,5 +18,8 @@ __pycache__/
 hf-cache/
 media/
 
+# Browser automation artifacts
+.playwright-mcp/
+
 # OS
 .DS_Store

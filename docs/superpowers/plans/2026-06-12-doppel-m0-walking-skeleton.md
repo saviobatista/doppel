@@ -18,6 +18,15 @@
 - Frontend roda com `npm run dev` no host (proxy para a api do compose); container web/Caddy entra no M1.
 - Validação de rosto/áudio na gravação (MediaPipe) entra no M1; M0 grava sem validar.
 
+**Desvios de execução** (contratos atualizados em review; os blocos de código abaixo nas Tasks 5-8 representam a intenção original e os commits são a fonte da verdade):
+- Task 1: pyproject ganhou `workers` no hatch packages, `anyio` explícito, ruff lint select, `.python-version` 3.12.
+- Task 3: colunas datetime usam `TZDateTime` (TypeDecorator) para paridade tz-aware sqlite/postgres.
+- Task 5 (CONTRATO): `enqueue()` agora COMMITA a session antes do `xadd` (worker nunca vê job_id sem row); lanes inválidas levantam ValueError; streams com maxlen 10k. `subscribe()` virou `subscription()` (asynccontextmanager com subscribe eager no enter e aclose no exit): rotas SSE devem subscrever ANTES de ler o snapshot do banco.
+- Task 6/8 (decorrência): handlers fazem mutações de estado antes de chamar `enqueue` (que commita tudo) e não chamam `session.commit()` redundante; SSE re-lê o snapshot dentro de `subscription()`.
+- Task 7 (decorrência): worker trata job row ausente como log+ack+skip (defesa contra entradas órfãs) e usa consumer name único por processo.
+- Task 9: nesta máquina de dev as portas de host 8000 e 6379 estavam ocupadas por outro projeto; a api foi mapeada para `8200:8000` e o redis para `6380:6379` (portas internas inalteradas). `PYTHONUNBUFFERED=1` no env compartilhado para os logs do worker aparecerem. `VITE_API_URL` default passa a `http://localhost:8200` (Task 12 ajusta o default do api.ts).
+- Task 8: `create_video` ganhou cap de 16 MB no briefing e a galeria pula linhas sem `assets.fast`; avatars.py SSE ganhou o mesmo guard de `assets`.
+
 ---
 
 ## File Structure
@@ -118,6 +127,7 @@ dependencies = [
     "aiosqlite>=0.20",
     "redis>=5.2",
     "boto3>=1.35",
+    "anyio>=4.0",
     "pydantic-settings>=2.6",
     "python-multipart>=0.0.12",
 ]
@@ -138,12 +148,15 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+select = ["E", "F", "UP", "ASYNC", "RUF"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/doppel_api"]
+packages = ["src/doppel_api", "workers"]
 ```
 
 Criar `backend/src/doppel_api/__init__.py` e `backend/workers/__init__.py` vazios.

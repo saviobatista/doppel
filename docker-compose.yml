@@ -1,0 +1,58 @@
+name: doppel
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: doppel
+      POSTGRES_PASSWORD: doppel
+      POSTGRES_DB: doppel
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doppel"]
+      interval: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 10
+
+  floci:
+    image: hectorvent/floci:latest
+    ports: ["4566:4566"]
+    volumes: [flocidata:/app/data]
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment: &doppel_env
+      PYTHONUNBUFFERED: "1"
+      DOPPEL_DATABASE_URL: postgresql+asyncpg://doppel:doppel@postgres:5432/doppel
+      DOPPEL_REDIS_URL: redis://redis:6379/0
+      DOPPEL_S3_ENDPOINT: http://floci:4566
+      DOPPEL_S3_BUCKET: doppel-media
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    ports: ["8200:8000"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      floci: {condition: service_started}
+
+  stub-worker:
+    build: ./backend
+    restart: unless-stopped
+    command: ["python", "-m", "workers.stub_worker"]
+    environment: *doppel_env
+    depends_on:
+      api: {condition: service_started}
+
+volumes:
+  pgdata:
+  flocidata:
