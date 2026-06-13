@@ -48,17 +48,48 @@ async def test_avatar_events_sse_streams_published_events(app, client, device_to
         await publish(app.state.redis, avatar_id, "hello_ready", {"hello_url": "memory://h"})
 
     task = asyncio.create_task(emit())
+
+    async def consume() -> list[str]:
+        lines: list[str] = []
+        async with client.stream(
+            "GET", f"/v1/avatars/{avatar_id}/events", headers={"X-Device-Token": device_token}
+        ) as resp:
+            assert resp.status_code == 200
+            async for line in resp.aiter_lines():
+                lines.append(line)
+                if line == "event: hello_ready":
+                    break
+        return lines
+
+    lines = await asyncio.wait_for(consume(), timeout=10)
+    await task
+    assert "event: status" in lines
+    assert "event: hello_ready" in lines
+
+
+async def test_avatar_events_ready_snapshot_short_circuits(app, client, device_token):
+    avatar_id = await asyncio.to_thread(_ws_upload, app, device_token)
+    async with app.state.session_factory() as s:
+        avatar = (await s.execute(select(Avatar))).scalar_one()
+        avatar.status = "ready"
+        avatar.assets = {
+            **avatar.assets,
+            "hello": f"avatars/{avatar_id}/hello.mp4",
+            "feedback": f"avatars/{avatar_id}/feedback.mp4",
+        }
+        await s.commit()
     lines: list[str] = []
     async with client.stream(
         "GET", f"/v1/avatars/{avatar_id}/events", headers={"X-Device-Token": device_token}
     ) as resp:
-        assert resp.status_code == 200
         async for line in resp.aiter_lines():
             lines.append(line)
-            if line == "event: hello_ready":
-                break
-    await task
     assert "event: status" in lines
+    data_line = next(line for line in lines if line.startswith("data: "))
+    payload = json.loads(data_line[6:])
+    assert payload["value"] == "ready"
+    assert payload["hello_url"] == f"memory://avatars/{avatar_id}/hello.mp4"
+    assert payload["feedback_url"] == f"memory://avatars/{avatar_id}/feedback.mp4"
 
 
 async def test_avatar_events_404_for_foreign_avatar(app, client, device_token):
