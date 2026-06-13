@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://doppel:doppel@localhost:5432/doppel"
     redis_url: str = "redis://localhost:6379/0"
     s3_endpoint: str | None = "http://localhost:4566"
+    s3_public_endpoint: str | None = None  # browser-reachable endpoint for presigned URLs
     s3_bucket: str = "doppel-media"
     s3_region: str = "us-east-1"
     cors_origins: str = "http://localhost:5173"
@@ -43,7 +44,7 @@ class Settings(BaseSettings):
         default=10, validation_alias=AliasChoices("VIDEO_TARGET_SECONDS")
     )
 
-    @field_validator("s3_endpoint", mode="before")
+    @field_validator("s3_endpoint", "s3_public_endpoint", mode="before")
     @classmethod
     def _empty_str_to_none(cls, v: str | None) -> str | None:
         return None if v == "" else v
