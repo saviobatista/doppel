@@ -16,10 +16,19 @@ def test_group_alignment_to_words_groups_on_spaces():
     ]
 
 
-async def test_clone_returns_voice_id(monkeypatch):
+async def test_clone_passes_readable_file_not_path(monkeypatch, tmp_path):
+    # Regression: clone must hand the SDK a readable file object carrying the
+    # audio bytes, NOT the path string (a path string uploads garbage and
+    # ElevenLabs rejects it as "File is corrupted").
+    sample = tmp_path / "sample.wav"
+    sample.write_bytes(b"AUDIODATA")
+    seen = {}
+
     class FakeIvc:
         def create(self, name, files):
-            assert files == ["sample.wav"]
+            f = files[0]
+            seen["has_read"] = hasattr(f, "read")
+            seen["content"] = f.read()
             return types.SimpleNamespace(voice_id="voice-123")
 
     class FakeVoices:
@@ -29,7 +38,9 @@ async def test_clone_returns_voice_id(monkeypatch):
         voices = FakeVoices()
 
     monkeypatch.setattr(voice, "_client", lambda: FakeClient())
-    assert await voice.clone("sample.wav", name="Doppel user") == "voice-123"
+    assert await voice.clone(str(sample), name="Doppel user") == "voice-123"
+    assert seen["has_read"] is True
+    assert seen["content"] == b"AUDIODATA"
 
 
 async def test_tts_joins_byte_iterator(monkeypatch):

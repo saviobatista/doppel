@@ -28,6 +28,12 @@ class WorkerContext:
     consumer: str
 
 
+def _fmt_exc(exc: Exception) -> str:
+    # provider SDK errors (e.g. ElevenLabs ApiError) have an empty repr; surface .body
+    body = getattr(exc, "body", None)
+    return f"{type(exc).__name__}: {body or exc}"
+
+
 async def _store_fal_video(ctx: "WorkerContext", url: str, key: str, tmp: Path, name: str) -> None:
     local = tmp / name
     await media.download(url, str(local))
@@ -99,7 +105,7 @@ async def _gen_broll(ctx, scene, idx, total, tmp, video_id, sem) -> media.BrollC
                           {"step": f"component_{idx + 2}_of_{total}"})
             return media.BrollClip(path=path, start=float(scene["start"]), end=float(scene["end"]))
         except Exception as exc:  # graceful degrade: drop this scene, keep the video
-            print(f"broll scene {scene.get('id')} failed, dropping: {exc!r}")
+            print(f"broll scene {scene.get('id')} failed, dropping: {_fmt_exc(exc)}")
             return None
 
 
@@ -191,7 +197,7 @@ async def process_one(ctx: WorkerContext) -> bool:
         await HANDLERS[kind](ctx, payload)
         status = "done"
     except Exception as exc:  # worker must survive any job failure
-        print(f"job {msg['job_id']} ({kind}) failed: {exc!r}")
+        print(f"job {msg['job_id']} ({kind}) failed: {_fmt_exc(exc)}")
         status = "failed"
         entity_id = payload.get("avatar_id") or payload.get("video_id") or ""
         async with ctx.session_factory() as s:

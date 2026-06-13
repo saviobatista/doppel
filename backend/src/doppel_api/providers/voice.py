@@ -38,7 +38,10 @@ def group_alignment_to_words(
 
 async def clone(sample_path: str, name: str) -> str:
     def _do() -> str:
-        created = _client().voices.ivc.create(name=name, files=[sample_path])
+        # ElevenLabs IVC needs a readable file object, not a path string;
+        # passing the path makes it upload garbage ("File is corrupted").
+        with Path(sample_path).open("rb") as f:
+            created = _client().voices.ivc.create(name=name, files=[f])
         return created.voice_id
 
     return await anyio.to_thread.run_sync(_do)
