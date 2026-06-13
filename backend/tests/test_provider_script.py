@@ -30,8 +30,9 @@ async def test_build_script_returns_tool_input(monkeypatch):
         messages = FakeMessages()
 
     monkeypatch.setattr(script, "_client", lambda: FakeClient())
-    result = await script.build_script("quero um video sobre seguranca digital")
+    result = await script.build_script("quero um video sobre seguranca digital", 10)
     assert result == expected
     assert captured["model"] == "claude-sonnet-4-6"
     assert captured["tool_choice"] == {"type": "tool", "name": "emit_script"}
     assert "seguranca digital" in captured["messages"][0]["content"]
+    assert "10" in captured["system"]
