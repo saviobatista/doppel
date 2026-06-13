@@ -1,4 +1,4 @@
-"""Stub worker for M0: consumes jobs and produces placeholder videos via ffmpeg."""
+"""Doppel generation worker: consumes jobs and drives the managed providers."""
 import asyncio
 import os
 import socket
