@@ -24,6 +24,8 @@
 - Task 5 (CONTRATO): `enqueue()` agora COMMITA a session antes do `xadd` (worker nunca vê job_id sem row); lanes inválidas levantam ValueError; streams com maxlen 10k. `subscribe()` virou `subscription()` (asynccontextmanager com subscribe eager no enter e aclose no exit): rotas SSE devem subscrever ANTES de ler o snapshot do banco.
 - Task 6/8 (decorrência): handlers fazem mutações de estado antes de chamar `enqueue` (que commita tudo) e não chamam `session.commit()` redundante; SSE re-lê o snapshot dentro de `subscription()`.
 - Task 7 (decorrência): worker trata job row ausente como log+ack+skip (defesa contra entradas órfãs) e usa consumer name único por processo.
+- Task 9: nesta máquina de dev as portas de host 8000 e 6379 estavam ocupadas por outro projeto; a api foi mapeada para `8200:8000` e o redis para `6380:6379` (portas internas inalteradas). `PYTHONUNBUFFERED=1` no env compartilhado para os logs do worker aparecerem. `VITE_API_URL` default passa a `http://localhost:8200` (Task 12 ajusta o default do api.ts).
+- Task 8: `create_video` ganhou cap de 16 MB no briefing e a galeria pula linhas sem `assets.fast`; avatars.py SSE ganhou o mesmo guard de `assets`.
 
 ---
 
