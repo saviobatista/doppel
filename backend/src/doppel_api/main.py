@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from doppel_api.config import get_settings
+from doppel_api.log import setup_logging
 from doppel_api.db import init_db, make_engine, make_session_factory
 from doppel_api.routes import avatars, sessions, videos
 from doppel_api.storage import S3Storage, Storage
@@ -20,6 +21,7 @@ def create_app(
     """App factory. Injected deps are for tests and only honored with run_startup=False;
     with run_startup=True the lifespan wires real deps and overwrites app.state."""
     settings = get_settings()
+    setup_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

@@ -1,5 +1,8 @@
-const BASE: string = import.meta.env.VITE_API_URL ?? "http://localhost:8200";
-const WS_BASE = BASE.replace(/^http/, "ws");
+// Empty BASE = same-origin; Vite proxies /v1 to the compose api.
+const BASE: string = import.meta.env.VITE_API_URL ?? "";
+const WS_BASE = BASE
+  ? BASE.replace(/^http/, "ws")
+  : `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}`;
 
 let token = localStorage.getItem("doppel_token") ?? "";
 

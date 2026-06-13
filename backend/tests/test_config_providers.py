@@ -1,27 +1,22 @@
 from doppel_api.config import Settings
 
 
-def test_provider_settings_read_raw_env_names(monkeypatch):
-    monkeypatch.setenv("FAL_KEY", "fal-secret")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-secret")
-    monkeypatch.setenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-    monkeypatch.setenv("ELEVENLABS_API_KEY", "el-secret")
-    monkeypatch.setenv("FAL_T2I_MODEL", "fal-ai/flux/schnell")
-    monkeypatch.setenv("PIPELINE_CONCURRENCY", "3")
+def test_settings_loads_inference_env(monkeypatch):
+    monkeypatch.setenv("INFERENCE_API_KEY", "inf-secret")
+    monkeypatch.setenv("AVATAR_API_BASE", "http://latentsync:8080")
+    monkeypatch.setenv("BROLL_API_BASE", "http://cosmos:8000")
+    monkeypatch.setenv("BROLL_FAST_STEPS", "20")
     s = Settings()
-    assert s.fal_key == "fal-secret"
-    assert s.anthropic_api_key == "anthropic-secret"
-    assert s.anthropic_model == "claude-sonnet-4-6"
-    assert s.elevenlabs_api_key == "el-secret"
-    assert s.fal_t2i_model == "fal-ai/flux/schnell"
-    assert s.pipeline_concurrency == 3
+    assert s.inference_api_key == "inf-secret"
+    assert s.avatar_api_base == "http://latentsync:8080"
+    assert s.broll_api_base == "http://cosmos:8000"
+    assert s.broll_fast_steps == 20
 
 
-def test_provider_settings_defaults():
+def test_settings_inference_defaults():
     s = Settings()
-    assert s.elevenlabs_model == "eleven_multilingual_v2"
-    assert s.fal_lipsync_model == "veed/fabric-1.0"
-    assert s.fal_broll_model == "fal-ai/kling-video/v2.1/standard/image-to-video"
-    assert s.fal_t2i_model == "fal-ai/flux/schnell"
-    assert s.caption_font == "DejaVu Sans"
-    assert s.pipeline_concurrency == 4
+    assert s.broll_fast_size == "480x832"
+    assert s.broll_fast_fps == 24.0
+    assert s.avatar_inference_steps == 20
+    assert "/latentsync" in s.avatar_api_base
+    assert "/cosmos3" in s.broll_api_base

@@ -90,24 +90,16 @@ def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
 
     monkeypatch.setattr(worker.script, "build_script", fake_build_script)
 
-    async def fake_upload(path):
-        return f"https://fal.media/{path.split('/')[-1]}"
+    async def fake_lipsync(video_path, audio_path):
+        return b"MP4"
 
-    async def fake_talking(image_url, audio_url, resolution="480p"):
-        return "https://fal.media/talk.mp4"
-
-    async def fake_image(prompt, image_size="portrait_16_9"):
+    async def fake_broll_i2v(**kwargs):
         if not broll_ok:
-            raise RuntimeError("flux boom")
-        return "https://fal.media/i.jpg"
+            raise RuntimeError("cosmos boom")
+        return b"MP4"
 
-    async def fake_broll(image_url, prompt, duration="5"):
-        return "https://fal.media/b.mp4"
-
-    monkeypatch.setattr(worker.video, "upload", fake_upload)
-    monkeypatch.setattr(worker.video, "talking", fake_talking)
-    monkeypatch.setattr(worker.video, "image", fake_image)
-    monkeypatch.setattr(worker.video, "broll", fake_broll)
+    monkeypatch.setattr(worker.video, "lipsync", fake_lipsync)
+    monkeypatch.setattr(worker.video, "broll_i2v", fake_broll_i2v)
 
 
 async def _seed_avatar(ctx) -> str:
@@ -131,14 +123,21 @@ async def _seed_ready_avatar_and_video(ctx) -> str:
         s.add(d)
         await s.flush()
         a = Avatar(device_id=d.id, status="ready",
-                   assets={"face_image": "avatars/a/face.png", "voice_id": "voice-xyz"})
+                   assets={
+                       "source": "raw/a/source.webm",
+                       "face_image": "avatars/a/face.png",
+                       "reference_frame": "avatars/a/reference_frame.png",
+                       "voice_id": "voice-xyz",
+                   })
         s.add(a)
         await s.flush()
         v = Video(device_id=d.id, avatar_id=a.id, assets={"briefing": "videos/v/briefing.webm"})
         s.add(v)
         await s.flush()
         video_id = v.id
+        await ctx.storage.put("raw/a/source.webm", b"SRC", "video/webm")
         await ctx.storage.put("avatars/a/face.png", b"IMG", "image/png")
+        await ctx.storage.put("avatars/a/reference_frame.png", b"IMG", "image/png")
         await ctx.storage.put("videos/v/briefing.webm", b"AUD", "audio/webm")
         await enqueue(ctx.redis, s, kind="fast_generate", lane="interactive",
                       payload={"video_id": video_id})
@@ -172,6 +171,7 @@ async def test_avatar_prep_produces_hello_and_feedback(ctx, monkeypatch):
     assert avatar.status == "ready"
     assert avatar.assets["voice_id"] == "voice-xyz"
     assert avatar.assets["face_image"] == f"avatars/{avatar_id}/face.png"
+    assert avatar.assets["reference_frame"] == f"avatars/{avatar_id}/reference_frame.png"
     assert avatar.assets["hello"] == f"avatars/{avatar_id}/hello.mp4"
     assert await ctx.storage.get(avatar.assets["hello"]) == b"MP4"
     assert events[-1][0] == "hello_ready"
@@ -228,4 +228,6 @@ async def test_avatar_prep_failure_marks_failed(ctx, monkeypatch):
         job = (await s.execute(select(Job).where(Job.kind == "avatar_prep"))).scalar_one()
     assert avatar.status == "failed"
     assert job.status == "failed"
-    assert events[-1] == ("failed", {"kind": "avatar_prep"})
+    assert events[-1][0] == "failed"
+    assert events[-1][1]["kind"] == "avatar_prep"
+    assert "error" in events[-1][1]

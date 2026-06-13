@@ -1,5 +1,9 @@
 name: doppel
 
+networks:
+  default:
+    name: doppel
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -33,9 +37,12 @@ services:
     env_file: .env
     environment: &doppel_env
       PYTHONUNBUFFERED: "1"
+      DOPPEL_CORS_ORIGINS: "http://localhost:5173,http://localhost:5180"
+      DOPPEL_LOG_LEVEL: INFO
       DOPPEL_DATABASE_URL: postgresql+asyncpg://doppel:doppel@postgres:5432/doppel
       DOPPEL_REDIS_URL: redis://redis:6379/0
       DOPPEL_S3_ENDPOINT: http://floci:4566
+      DOPPEL_S3_PUBLIC_ENDPOINT: http://localhost:4566
       DOPPEL_S3_BUCKET: doppel-media
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
@@ -55,6 +62,19 @@ services:
     depends_on:
       api: {condition: service_started}
 
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports: ["5180:5173"]
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    volumes:
+      - ./frontend:/app
+      - web_node_modules:/app/node_modules
+    depends_on:
+      api: {condition: service_started}
+
 volumes:
   pgdata:
   flocidata:
+  web_node_modules:

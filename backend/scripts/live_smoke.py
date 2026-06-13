@@ -1,11 +1,9 @@
-"""Opt-in live end-to-end smoke against the REAL providers (costs money).
+"""Opt-in live end-to-end smoke against the REAL providers (costs GPU time).
 
 Run with real keys in the environment:
     DOPPEL_LIVE_SMOKE=1 uv run python scripts/live_smoke.py
 
-It synthesizes a 3s clip with ffmpeg, runs voice clone + TTS + Fabric for the
-avatar, then a script + b-roll + compose. Prints output paths. Refuses to run
-unless DOPPEL_LIVE_SMOKE=1 to avoid accidental spend.
+Uses Starya inference (LatentSync + Cosmos3) plus ElevenLabs + Claude.
 """
 import asyncio
 import os
@@ -33,20 +31,19 @@ async def run() -> None:
         sample = str(tmp / "sample.mp4")
         _make_sample(sample)
 
-        face = await media.extract_frame(sample, str(tmp / "face.png"))
+        await media.extract_frame(sample, str(tmp / "face.png"))
         ref = await media.extract_audio(sample, str(tmp / "ref.wav"))
+        reference_frame = (tmp / "face.png").read_bytes()
         print("cloning voice...")
         voice_id = await voice.clone(ref, name="live-smoke")
         print("voice:", voice_id)
 
         hello_bytes = await voice.tts(voice_id, "Oi! Eu sou você aprimorado!")
         (tmp / "hello.mp3").write_bytes(hello_bytes)
-        face_url = await video.upload(face)
-        hello_audio_url = await video.upload(str(tmp / "hello.mp3"))
-        print("generating talking avatar (Fabric)...")
-        talk_url = await video.talking(face_url, hello_audio_url)
-        await media.download(talk_url, str(tmp / "hello.mp4"))
-        print("hello.mp4 ->", tmp / "hello.mp4", os.path.getsize(tmp / "hello.mp4"), "bytes")  # noqa: ASYNC240
+        print("generating lip-sync hello (LatentSync)...")
+        hello_mp4 = await video.lipsync(sample, str(tmp / "hello.mp3"))
+        (tmp / "hello.mp4").write_bytes(hello_mp4)
+        print("hello.mp4 ->", tmp / "hello.mp4", len(hello_mp4), "bytes")
 
         print("building script...")
         sjson = await script.build_script("Quero um vídeo curto sobre proteger suas senhas.")
@@ -54,16 +51,20 @@ async def run() -> None:
 
         narration, cues = await voice.tts_with_timestamps(voice_id, sjson["narration"]["text"])
         (tmp / "narration.mp3").write_bytes(narration)
-        narration_url = await video.upload(str(tmp / "narration.mp3"))
-        avatar_url = await video.talking(face_url, narration_url)
-        await media.download(avatar_url, str(tmp / "avatar.mp4"))
+        avatar_mp4 = await video.lipsync(sample, str(tmp / "narration.mp3"))
+        (tmp / "avatar.mp4").write_bytes(avatar_mp4)
 
         brolls = []
         for i, sc in enumerate(s for s in sjson["scenes"] if s["type"] == "broll"):
-            img = await video.image(sc.get("prompt", "abstract background"))
-            clip = await video.broll(img, sc.get("motion") or sc.get("prompt", ""))
+            duration = float(sc["end"]) - float(sc["start"])
+            clip = await video.broll_i2v(
+                first_frame=reference_frame,
+                prompt=sc.get("prompt", "abstract background"),
+                negative_prompt=sc.get("negative", ""),
+                duration_sec=duration,
+            )
             p = str(tmp / f"broll{i}.mp4")
-            await media.download(clip, p)
+            Path(p).write_bytes(clip)
             brolls.append(media.BrollClip(path=p, start=float(sc["start"]), end=float(sc["end"])))
 
         out = str(Path.cwd() / "live_smoke_out.mp4")

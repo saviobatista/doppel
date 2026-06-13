@@ -2,6 +2,10 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from doppel_api.log import get_logger, kv
+
+log = get_logger("events")
+
 # Sentinel yielded by the subscription iterator when no real message arrived
 # within HEARTBEAT_SECONDS. The SSE routes turn it into an SSE comment to keep
 # the connection alive. Kept under 5s because redis-py 8's pubsub raises
@@ -16,6 +20,7 @@ def _channel(entity_id: str) -> str:
 
 
 async def publish(redis, entity_id: str, event: str, data: dict) -> None:
+    log.debug("event publish %s", kv(entity_id=entity_id, event=event, **data))
     await redis.publish(_channel(entity_id), json.dumps({"event": event, "data": data}))
 
 

@@ -1,6 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from doppel_api.log import get_logger, kv
 from doppel_api.models import Job
+
+log = get_logger("queue")
 
 STREAMS = {"interactive": "jobs:interactive", "background": "jobs:background"}
 GROUP = "workers"
@@ -31,7 +34,12 @@ async def enqueue(redis, session: AsyncSession, kind: str, lane: str, payload: d
     job = Job(kind=kind, lane=lane, payload=payload)
     session.add(job)
     await session.commit()
-    await redis.xadd(STREAMS[lane], {"job_id": job.id}, maxlen=MAXLEN, approximate=True)
+    try:
+        await redis.xadd(STREAMS[lane], {"job_id": job.id}, maxlen=MAXLEN, approximate=True)
+    except Exception:
+        log.exception("job enqueue stream write failed %s", kv(job_id=job.id, kind=kind, lane=lane))
+        raise
+    log.info("job enqueued %s", kv(job_id=job.id, kind=kind, lane=lane, **payload))
     return job
 
 

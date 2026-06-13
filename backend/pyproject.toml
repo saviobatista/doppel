@@ -11,7 +11,6 @@ dependencies = [
     "redis>=5.2",
     "boto3>=1.35",
     "anyio>=4.0",
-    "fal-client>=0.5",
     "elevenlabs>=1.50",
     "anthropic>=0.69",
     "httpx>=0.28",

@@ -1,52 +1,69 @@
 from doppel_api.providers import video
 
 
-async def test_upload_returns_url(monkeypatch):
-    async def fake_upload(path):
-        assert path == "f.png"
-        return "https://fal.media/f.png"
+async def test_lipsync_posts_multipart_and_returns_bytes(monkeypatch, tmp_path):
+    video_file = tmp_path / "v.mp4"
+    audio_file = tmp_path / "a.mp3"
+    video_file.write_bytes(b"VID")
+    audio_file.write_bytes(b"AUD")
+    seen: dict = {}
 
-    monkeypatch.setattr(video.fal_client, "upload_file_async", fake_upload)
-    assert await video.upload("f.png") == "https://fal.media/f.png"
+    class FakeResp:
+        content = b"OUT"
 
+        def raise_for_status(self):
+            return None
 
-async def test_talking_calls_fabric_and_parses_url(monkeypatch):
-    seen = {}
+    class FakeClient:
+        async def __aenter__(self):
+            return self
 
-    async def fake_subscribe(model, arguments):
-        seen["model"] = model
-        seen["args"] = arguments
-        return {"video": {"url": "https://fal.media/talk.mp4"}}
+        async def __aexit__(self, *a):
+            return None
 
-    monkeypatch.setattr(video.fal_client, "subscribe_async", fake_subscribe)
-    url = await video.talking("img-url", "aud-url", resolution="480p")
-    assert url == "https://fal.media/talk.mp4"
-    assert seen["model"] == "veed/fabric-1.0"
-    assert seen["args"] == {"image_url": "img-url", "audio_url": "aud-url", "resolution": "480p"}
+        async def post(self, url, data, files, headers):
+            seen["url"] = url
+            seen["data"] = data
+            seen["headers"] = headers
+            return FakeResp()
 
-
-async def test_image_calls_flux_and_parses_url(monkeypatch):
-    async def fake_subscribe(model, arguments):
-        assert model == "fal-ai/flux/schnell"
-        assert arguments["prompt"] == "a vault"
-        assert arguments["num_images"] == 1
-        return {"images": [{"url": "https://fal.media/i.jpg"}]}
-
-    monkeypatch.setattr(video.fal_client, "subscribe_async", fake_subscribe)
-    assert await video.image("a vault") == "https://fal.media/i.jpg"
+    monkeypatch.setattr(video.httpx, "AsyncClient", lambda **kw: FakeClient())
+    out = await video.lipsync(str(video_file), str(audio_file))
+    assert out == b"OUT"
+    assert seen["url"].endswith("/v1/lipsync")
+    assert seen["data"]["guidance_scale"] == "1.5"
 
 
-async def test_broll_calls_kling_with_string_duration(monkeypatch):
-    seen = {}
+async def test_broll_i2v_posts_cosmos_form(monkeypatch):
+    seen: dict = {}
 
-    async def fake_subscribe(model, arguments):
-        seen.update(arguments)
-        seen["model"] = model
-        return {"video": {"url": "https://fal.media/b.mp4"}}
+    class FakeResp:
+        content = b"BROLL"
 
-    monkeypatch.setattr(video.fal_client, "subscribe_async", fake_subscribe)
-    url = await video.broll("i.jpg", "camera zooms in")
-    assert url == "https://fal.media/b.mp4"
-    assert seen["model"] == "fal-ai/kling-video/v2.1/standard/image-to-video"
-    assert seen["image_url"] == "i.jpg"
-    assert seen["duration"] == "5"  # string, not int
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return None
+
+        async def post(self, url, data, files, headers):
+            seen["url"] = url
+            seen["data"] = data
+            seen["files"] = files
+            return FakeResp()
+
+    monkeypatch.setattr(video.httpx, "AsyncClient", lambda **kw: FakeClient())
+    out = await video.broll_i2v(
+        first_frame=b"PNG",
+        prompt="beach sunrise",
+        negative_prompt="text",
+        duration_sec=5.0,
+    )
+    assert out == b"BROLL"
+    assert seen["url"].endswith("/v1/videos/sync")
+    assert seen["data"]["prompt"] == "beach sunrise"
+    assert seen["data"]["num_frames"] == "120"  # 5s * 24fps
