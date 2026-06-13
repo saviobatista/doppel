@@ -98,4 +98,6 @@ A composição (`media.compose_timeline`) e o upload dos entregáveis ao floci c
 - Tabela `components` no Postgres (o cache local cobre a necessidade de validação; a tabela é otimização futura para multi-instância/galeria HQ).
 - Invalidação por TTL / limpeza automática do cache (por ora é manual: apagar a pasta `cache/`).
 - Compartilhamento do cache entre máquinas (é local por design).
-- Faixa HQ, trilha sonora, avatar em cena - seguem fora.
+- Faixa HQ/HD, trilha sonora, avatar em cena - seguem fora.
+
+**Nota sobre a faixa HD**: ela NÃO existe no código hoje (não há handler `hq_generate`, nem campo `status_hq`, nem upscale - o pipeline gera só a faixa fast 540x960 e para). Não há nada rodando nem custando por ela. Quando for construída, entra atrás de uma **feature flag default-OFF** (ex.: `HQ_ENABLED=false`), para só rodar quando o fast estiver 100%.
