@@ -31,6 +31,7 @@ services:
     build: ./backend
     restart: unless-stopped
     environment: &doppel_env
+      PYTHONUNBUFFERED: "1"
       DOPPEL_DATABASE_URL: postgresql+asyncpg://doppel:doppel@postgres:5432/doppel
       DOPPEL_REDIS_URL: redis://redis:6379/0
       DOPPEL_S3_ENDPOINT: http://floci:4566
