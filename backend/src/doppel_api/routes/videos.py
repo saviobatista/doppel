@@ -14,6 +14,8 @@ from doppel_api.queue import enqueue
 
 router = APIRouter()
 
+MAX_BRIEFING_BYTES = 16 * 1024 * 1024
+
 
 class FeedbackIn(BaseModel):
     rating: Literal["up", "down"]
@@ -38,8 +40,11 @@ async def create_video(
     session.add(video)
     await session.flush()
     if briefing is not None:
+        data = await briefing.read(MAX_BRIEFING_BYTES + 1)
+        if len(data) > MAX_BRIEFING_BYTES:
+            raise HTTPException(status_code=413, detail="briefing too large")
         key = f"videos/{video.id}/briefing.webm"
-        await storage.put(key, await briefing.read(), briefing.content_type or "audio/webm")
+        await storage.put(key, data, briefing.content_type or "audio/webm")
         video.assets = {"briefing": key}
     # enqueue COMMITS the session (video row + assets included)
     await enqueue(redis, session, kind="fast_generate", lane="interactive",
@@ -125,10 +130,13 @@ async def gallery(
     )
     videos = []
     for v in result.scalars():
+        key = v.assets.get("fast")
+        if key is None:
+            continue  # corrupted row must not brick the gallery
         videos.append({
             "video_id": v.id,
             "created_at": v.created_at.isoformat(),
-            "fast_url": await storage.presign_get(v.assets["fast"]),
+            "fast_url": await storage.presign_get(key),
         })
     return {"videos": videos}
 
@@ -140,6 +148,8 @@ async def delete_me(
 ) -> None:
     await session.execute(sql_delete(Video).where(Video.device_id == device.id))
     await session.execute(sql_delete(Avatar).where(Avatar.device_id == device.id))
+    # merge is defensive: device comes from the same cached request session today,
+    # but a future get_device refactor must not silently detach it
     merged = await session.merge(device)
     merged.deleted_at = datetime.now(UTC)
     await session.commit()

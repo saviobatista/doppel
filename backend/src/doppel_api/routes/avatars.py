@@ -93,7 +93,7 @@ async def avatar_events(
                     await snap_session.execute(select(Avatar).where(Avatar.id == avatar_id))
                 ).scalar_one()
             data: dict = {"value": snap.status}
-            if snap.status == "ready":
+            if snap.status == "ready" and "hello" in snap.assets:
                 data["hello_url"] = await storage.presign_get(snap.assets["hello"])
                 data["feedback_url"] = await storage.presign_get(snap.assets["feedback"])
             yield sse_format("status", data)
