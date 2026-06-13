@@ -14,6 +14,26 @@ Doppel transforma uma única gravação de ~40 segundos do usuário (rosto + voz
 
 O diferencial não é nenhum modelo individual: é a experiência costurada com latência escondida e o reveal na mesma sessão.
 
+### 1.1 Posicionamento competitivo (referência: HeyGen)
+
+HeyGen é a referência de mercado e também um driver managed deste design (matriz 5.2). A sobreposição tecnológica é grande; a de produto é pequena: HeyGen é uma plataforma de produção (dashboard B2B, editor, templates, tradução em 175 idiomas), Doppel é uma experiência consumer de sessão única com a voz como única interface.
+
+| Dimensão | HeyGen (2026) | Doppel |
+|---|---|---|
+| Criação do avatar | Digital Twins: foto/vídeo curto + vídeo de consentimento, etapa de setup em dashboard | Gravação de 40s que já é consentimento + voz + footage; o hello em 10-20s é o primeiro ato da experiência |
+| Ideia para vídeo completo | Video Agent: prompt de texto gera vídeo com avatar, b-roll, trilha e legendas (o paralelo mais próximo do nosso pipeline) | Briefing falado gera o mesmo pacote; regeneração conversacional com o próprio avatar |
+| Latência | Assíncrona por design (10-30 min em pico nos planos baixos) | Reveal ao vivo < 2 min; HQ em background |
+| Custo por vídeo de 30s | Avatar IV API ~US$ 4/min; Video Agent ~US$ 1-2/min (pay-as-you-go) | GPU-minuto coberto por créditos AWS; marginal ~zero no selfhosted |
+| Dados | Biometria no vendor, sem self-host | Pipeline e biometria sob nosso controle (LGPD) |
+
+Leituras estratégicas:
+
+1. **Validação técnica**: o Instant Avatar deles usa a mesma técnica da nossa faixa rápida (re-sync de footage real) e o Avatar IV equivale à nossa faixa HQ. A arquitetura de duas faixas espelha o melhor deles, entregando a primeira ao vivo.
+2. **Uso como driver**: Avatar IV API serve para bake-off de qualidade no M1 (dinheiro real, fora dos créditos). O Video Agent não serve como driver: entrega pacote fechado e destruiria o contrato de roteiro, o cache por componente e o loop de feedback por voz.
+3. **Risco competitivo**: eles podem empacotar experiência consumer semelhante. Defesas: sessão única webcam-ao-uau, PT-BR first, regeneração conversacional e custo marginal ~zero.
+
+Referências: [Avatar IV API](https://www.heygen.com/blog/announcing-the-avatar-iv-api), [API pricing](https://help.heygen.com/en/articles/10060327-heygen-api-pricing-explained), [planos 2026](https://www.eesel.ai/blog/heygen-pricing).
+
 ## 2. A experiência (requisito mestre)
 
 Toda decisão técnica deste documento serve a esta sequência. Qualquer mudança que degrade este fluxo é regressão.
