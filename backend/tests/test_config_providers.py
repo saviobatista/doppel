@@ -25,3 +25,13 @@ def test_provider_settings_defaults():
     assert s.fal_t2i_model == "fal-ai/flux/schnell"
     assert s.caption_font == "DejaVu Sans"
     assert s.pipeline_concurrency == 4
+    assert s.cache_dir == "cache"
+    assert s.video_target_seconds == 10
+
+
+def test_cache_and_duration_env(monkeypatch):
+    monkeypatch.setenv("CACHE_DIR", "/app/cache")
+    monkeypatch.setenv("VIDEO_TARGET_SECONDS", "30")
+    s = Settings()
+    assert s.cache_dir == "/app/cache"
+    assert s.video_target_seconds == 30

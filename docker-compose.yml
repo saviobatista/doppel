@@ -33,6 +33,7 @@ services:
     env_file: .env
     environment: &doppel_env
       PYTHONUNBUFFERED: "1"
+      CACHE_DIR: /app/cache
       DOPPEL_DATABASE_URL: postgresql+asyncpg://doppel:doppel@postgres:5432/doppel
       DOPPEL_REDIS_URL: redis://redis:6379/0
       DOPPEL_S3_ENDPOINT: http://floci:4566
@@ -41,6 +42,8 @@ services:
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-east-1
     ports: ["8200:8000"]
+    volumes:
+      - ./cache:/app/cache
     depends_on:
       postgres: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -52,6 +55,8 @@ services:
     env_file: .env
     command: ["python", "-m", "workers.worker"]
     environment: *doppel_env
+    volumes:
+      - ./cache:/app/cache
     depends_on:
       api: {condition: service_started}
 
