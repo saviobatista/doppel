@@ -96,6 +96,8 @@ Gerado pelo LLM a partir do briefing transcrito. Os campos são emitidos em stre
 
 Linha do tempo: o áudio da narração corre contínuo por ~30s; o vídeo alterna entre o avatar falando e b-rolls cobrindo a narração (estilo documentário). O avatar track é gerado inteiro (30s) e o compositor corta pelas janelas.
 
+O campo `type` reserva um terceiro valor, `avatar_scene` (com `setting` e `framing`), descrito em 5.5. O LLM do MVP é instruído a emitir apenas `avatar` e `broll`: quando o briefing declara um ambiente ("num podcast famoso", "apresentando um parque"), o contexto entra via b-rolls e establishing shots do cenário.
+
 ### 5.2 Matriz de capacidades
 
 | Capacidade | Driver selfhosted (g7e) | Licença (selfhosted) | Driver managed |
@@ -128,6 +130,15 @@ Disparada após thumbs up (não desperdiçar GPU em vídeo rejeitado):
 1. Toca o vídeo de feedback cacheado.
 2. Captura o delta por voz, STT, e o LLM **edita** o roteiro existente (diff semântico, não recriação).
 3. Re-gera apenas componentes afetados: assets intermediários são cacheados por hash do nó do roteiro (b-roll por hash do prompt+seed, narração por hash do texto). Mudou a cena 2: re-gera 1 b-roll e re-compõe. Mudou o texto: re-gera narração + lip-sync + re-compõe.
+
+### 5.5 Extensão reservada: avatar em cena (pós-MVP)
+
+Briefings como "falando sobre cibersegurança num podcast famoso" pedem o avatar dentro do ambiente, com enquadramento livre (diagonal, wide), e não o talking head frontal. O contrato já reserva `type: "avatar_scene"` com `setting` (descrição do ambiente) e `framing` (`frontal | diagonal | wide`) para que a ativação futura não exija migração. Caminho técnico documentado:
+
+- **Aproximação na faixa rápida**: background replacement por matting de vídeo (RVM/MODNet) sobre o footage real + fundo gerado a partir do `setting`; vale apenas para `framing: frontal` (caso "parque olhando para a câmera").
+- **Cena real na faixa HQ**: speech-to-video com referência de identidade. Selfhosted: Wan 2.2 S2V-14B (Apache 2.0), alimentado com frames de referência extraídos do vídeo de leitura + narração clonada + prompt de cena; alternativa HunyuanVideo-Avatar (validar licença Tencent). Managed: Runway Gen-4 References + lip-sync via API (ex.: sync.so), já que Nova Reel não preserva identidade de pessoa específica.
+- **Multi-shot**: o LLM quebra cenas `avatar_scene` em takes de 5 a 8s alternando ângulos (wide do estúdio, diagonal falando, close), o que melhora a qualidade dos modelos e reproduz a linguagem de cortes de um podcast real.
+- **Limitações conhecidas**: identidade "muito parecida" (não idêntica) em ângulos acentuados, artefatos de mãos/gestos, e latência incompatível com o reveal de 120s (recurso da faixa HQ ou de um reveal estendido opt-in).
 
 ## 6. Engenharia de latência
 
@@ -282,7 +293,7 @@ A AWS está coberta por créditos amplos do projeto: **dimensionamento (seção 
 
 ## 14. Fora de escopo do MVP
 
-Contas e login (desenho B fica documentado), multi-idioma, feed público/social, edição manual de timeline, export direto para redes sociais, liveness com desafio de movimento, fine-tuning de voz por usuário, mobile nativo.
+Contas e login (desenho B fica documentado), multi-idioma, feed público/social, edição manual de timeline, export direto para redes sociais, liveness com desafio de movimento, fine-tuning de voz por usuário, mobile nativo, avatar em cena (reservado no contrato, caminho documentado em 5.5).
 
 ## 15. Questões em aberto
 
