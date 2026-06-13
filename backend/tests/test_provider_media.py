@@ -35,7 +35,7 @@ async def test_download_writes_fetched_bytes(tmp_path, monkeypatch):
         assert url == "https://fal.media/x.mp4"
         return b"VIDEO"
 
-    monkeypatch.setattr(media, "_fetch", fake_fetch)
+    monkeypatch.setattr(media, "fetch", fake_fetch)
     out = str(tmp_path / "x.mp4")
     result = await media.download("https://fal.media/x.mp4", out)
     assert result == out

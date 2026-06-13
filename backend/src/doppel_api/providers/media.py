@@ -106,7 +106,7 @@ async def compose_timeline(
     return out_path
 
 
-async def _fetch(url: str) -> bytes:
+async def fetch(url: str) -> bytes:
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.get(url)
         resp.raise_for_status()
@@ -114,6 +114,6 @@ async def _fetch(url: str) -> bytes:
 
 
 async def download(url: str, out_path: str) -> str:
-    data = await _fetch(url)
+    data = await fetch(url)
     await anyio.to_thread.run_sync(lambda: Path(out_path).write_bytes(data))
     return out_path
