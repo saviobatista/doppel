@@ -10,6 +10,7 @@ import redis.asyncio as aioredis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from doppel_api import cache
 from doppel_api.config import get_settings
 from doppel_api.constants import FEEDBACK_LINE, HELLO_LINE
 from doppel_api.db import init_db, make_engine, make_session_factory
@@ -34,14 +35,24 @@ def _fmt_exc(exc: Exception) -> str:
     return f"{type(exc).__name__}: {body or exc}"
 
 
-async def _store_fal_video(ctx: "WorkerContext", url: str, key: str, tmp: Path, name: str) -> None:
-    local = tmp / name
-    await media.download(url, str(local))
-    await ctx.storage.put(key, local.read_bytes(), "video/mp4")
+async def _fabric_bytes(face_path: str, audio_path: str) -> bytes:
+    face_url = await video.upload(face_path)
+    audio_url = await video.upload(audio_path)
+    return await media.fetch(await video.talking(face_url, audio_url))
+
+
+async def _flux_bytes(prompt: str) -> bytes:
+    return await media.fetch(await video.image(prompt))
+
+
+async def _kling_bytes(image_path: str, motion: str) -> bytes:
+    image_url = await video.upload(image_path)
+    return await media.fetch(await video.broll(image_url, motion))
 
 
 async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
     avatar_id = payload["avatar_id"]
+    settings = get_settings()
     await publish(ctx.redis, avatar_id, "progress", {"step": "preparing_avatar"})
 
     async with ctx.session_factory() as s:
@@ -54,27 +65,34 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
+        source_bytes = await ctx.storage.get(source_key)
+        ext = "mp4" if source_key.endswith(".mp4") else "webm"
+        cache.put_blob("source", [avatar_id], ext, source_bytes)
+
         src = tmp / "source"
-        src.write_bytes(await ctx.storage.get(source_key))
+        src.write_bytes(source_bytes)
+        face_path = await media.extract_frame(str(src), str(tmp / "face.png"))
+        ref_path = await media.extract_audio(str(src), str(tmp / "ref.wav"))
+        face_bytes = Path(face_path).read_bytes()  # noqa: ASYNC240
+        ref_bytes = Path(ref_path).read_bytes()  # noqa: ASYNC240
+        await ctx.storage.put(face_key, face_bytes, "image/png")
 
-        face_path = tmp / "face.png"
-        face = await media.extract_frame(str(src), str(face_path))
-        ref_audio = await media.extract_audio(str(src), str(tmp / "ref.wav"))
-        await ctx.storage.put(face_key, face_path.read_bytes(), "image/png")
-
-        voice_id = await voice.clone(ref_audio, name=f"doppel-{avatar_id[:8]}")
-        face_url = await video.upload(face)
-
-        for line, key, name in (
-            (HELLO_LINE, hello_key, "hello"),
-            (FEEDBACK_LINE, feedback_key, "feedback"),
-        ):
-            audio_bytes = await voice.tts(voice_id, line)
-            audio_path = tmp / f"{name}.mp3"
-            audio_path.write_bytes(audio_bytes)
-            audio_url = await video.upload(str(audio_path))
-            talk_url = await video.talking(face_url, audio_url)
-            await _store_fal_video(ctx, talk_url, key, tmp, f"{name}.mp4")
+        voice_id = await cache.value(
+            "clone", [ref_bytes],
+            lambda: voice.clone(ref_path, name=f"doppel-{avatar_id[:8]}"),
+        )
+        model = settings.elevenlabs_model
+        for line, key in ((HELLO_LINE, hello_key), (FEEDBACK_LINE, feedback_key)):
+            audio_path = await cache.blob(
+                "tts", [voice_id, line, model], "mp3",
+                lambda v=voice_id, ln=line: voice.tts(v, ln),
+            )
+            audio_bytes = Path(audio_path).read_bytes()  # noqa: ASYNC240
+            talk_path = await cache.blob(
+                "fabric", [face_bytes, audio_bytes, "480p"], "mp4",
+                lambda fp=face_path, ap=audio_path: _fabric_bytes(fp, ap),
+            )
+            await ctx.storage.put(key, Path(talk_path).read_bytes(), "video/mp4")  # noqa: ASYNC240
 
     async with ctx.session_factory() as s:
         avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
@@ -94,16 +112,24 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
     })
 
 
-async def _gen_broll(ctx, scene, idx, total, tmp, video_id, sem) -> media.BrollClip | None:
+async def _gen_broll(ctx, scene, idx, total, video_id, sem) -> media.BrollClip | None:
     async with sem:
         try:
-            img_url = await video.image(scene.get("prompt", ""))
-            clip_url = await video.broll(img_url, scene.get("motion") or scene.get("prompt", ""))
-            path = str(tmp / f"broll{idx}.mp4")
-            await media.download(clip_url, path)
+            prompt = scene.get("prompt", "")
+            motion = scene.get("motion") or prompt
+            img_path = await cache.blob(
+                "flux", [prompt, "portrait_16_9"], "jpg", lambda p=prompt: _flux_bytes(p)
+            )
+            img_bytes = Path(img_path).read_bytes()  # noqa: ASYNC240
+            clip_path = await cache.blob(
+                "kling", [img_bytes, motion, "5"], "mp4",
+                lambda ip=img_path, m=motion: _kling_bytes(ip, m),
+            )
             await publish(ctx.redis, video_id, "progress",
                           {"step": f"component_{idx + 2}_of_{total}"})
-            return media.BrollClip(path=path, start=float(scene["start"]), end=float(scene["end"]))
+            return media.BrollClip(
+                path=clip_path, start=float(scene["start"]), end=float(scene["end"])
+            )
         except Exception as exc:  # graceful degrade: drop this scene, keep the video
             print(f"broll scene {scene.get('id')} failed, dropping: {_fmt_exc(exc)}")
             return None
@@ -122,23 +148,35 @@ async def handle_fast_generate(ctx: "WorkerContext", payload: dict) -> None:
 
     await publish(ctx.redis, video_id, "progress", {"step": "scripting"})
     fast_key = f"videos/{video_id}/fast.mp4"
+    model = settings.elevenlabs_model
+    target = settings.video_target_seconds
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp = Path(tmpdir)
+        briefing_bytes = await ctx.storage.get(briefing_key)
         brief = tmp / "briefing"
-        brief.write_bytes(await ctx.storage.get(briefing_key))
-        transcript = await voice.stt(str(brief))
-        script_json = await script.build_script(transcript)
+        brief.write_bytes(briefing_bytes)
 
-        narration_audio, cues = await voice.tts_with_timestamps(
-            voice_id, script_json["narration"]["text"]
+        transcript = await cache.value("stt", [briefing_bytes], lambda: voice.stt(str(brief)))
+        script_json = await cache.value(
+            "script", [transcript, str(target)],
+            lambda: script.build_script(transcript, target),
         )
-        (tmp / "narration.mp3").write_bytes(narration_audio)
+        narration_text = script_json["narration"]["text"]
 
-        face_local = tmp / "face.png"
-        face_local.write_bytes(await ctx.storage.get(face_key))
-        face_url = await video.upload(str(face_local))
-        narration_url = await video.upload(str(tmp / "narration.mp3"))
+        async def _tts_ts_producer():
+            audio, cues = await voice.tts_with_timestamps(voice_id, narration_text)
+            return audio, [{"text": c.text, "start": c.start, "end": c.end} for c in cues]
+
+        narration_path, cue_dicts = await cache.blob_with_meta(
+            "tts_ts", [voice_id, narration_text, model], "mp3", _tts_ts_producer
+        )
+        cues = [media.CaptionCue(**c) for c in cue_dicts]
+
+        face_bytes = await ctx.storage.get(face_key)
+        face_path = tmp / "face.png"
+        face_path.write_bytes(face_bytes)
+        narration_bytes = Path(narration_path).read_bytes()  # noqa: ASYNC240
 
         broll_scenes = [sc for sc in script_json["scenes"] if sc["type"] == "broll"]
         total = 1 + len(broll_scenes)
@@ -146,22 +184,22 @@ async def handle_fast_generate(ctx: "WorkerContext", payload: dict) -> None:
 
         async def gen_avatar() -> str:
             await publish(ctx.redis, video_id, "progress", {"step": f"component_1_of_{total}"})
-            url = await video.talking(face_url, narration_url)
-            path = str(tmp / "avatar.mp4")
-            await media.download(url, path)
-            return path
+            return await cache.blob(
+                "fabric", [face_bytes, narration_bytes, "480p"], "mp4",
+                lambda: _fabric_bytes(str(face_path), narration_path),
+            )
 
         results = await asyncio.gather(
             gen_avatar(),
-            *[_gen_broll(ctx, sc, i, total, tmp, video_id, sem)
+            *[_gen_broll(ctx, sc, i, total, video_id, sem)
               for i, sc in enumerate(broll_scenes)],
         )
         avatar_path = results[0]
         brolls = [b for b in results[1:] if b is not None]
 
-        out = tmp / "fast.mp4"
-        await media.compose_timeline(avatar_path, brolls, cues, str(out), settings.caption_font)
-        await ctx.storage.put(fast_key, out.read_bytes(), "video/mp4")
+        out = str(tmp / "fast.mp4")
+        await media.compose_timeline(avatar_path, brolls, cues, out, settings.caption_font)
+        await ctx.storage.put(fast_key, Path(out).read_bytes(), "video/mp4")  # noqa: ASYNC240
 
     async with ctx.session_factory() as s:
         v = (await s.execute(select(Video).where(Video.id == video_id))).scalar_one()

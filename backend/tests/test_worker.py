@@ -1,3 +1,4 @@
+from collections import Counter
 from pathlib import Path
 
 import fakeredis.aioredis
@@ -5,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from doppel_api import config
 from doppel_api.constants import HELLO_LINE
 from doppel_api.db import init_db, make_session_factory
 from doppel_api.models import Avatar, Device, Job, Video
@@ -17,7 +19,8 @@ from workers.worker import WorkerContext, process_one
 
 
 @pytest.fixture
-async def ctx():
+async def ctx(tmp_path, monkeypatch):
+    monkeypatch.setattr(config.get_settings(), "cache_dir", str(tmp_path / "cache"), raising=False)
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     await init_db(engine)
     redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -32,6 +35,8 @@ async def ctx():
 
 
 def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
+    counts = Counter()
+
     async def maybe(name):
         if fail == name:
             raise RuntimeError(f"{name} boom")
@@ -45,9 +50,8 @@ def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
         Path(out).write_bytes(b"WAV")  # noqa: ASYNC240
         return out
 
-    async def fake_download(url, out):
-        Path(out).write_bytes(b"MP4")  # noqa: ASYNC240
-        return out
+    async def fake_fetch(url):
+        return b"MP4"
 
     async def fake_compose(avatar_path, brolls, cues, out, font):
         Path(out).write_bytes(b"FINAL")  # noqa: ASYNC240
@@ -55,20 +59,24 @@ def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
 
     monkeypatch.setattr(media, "extract_frame", fake_extract_frame)
     monkeypatch.setattr(media, "extract_audio", fake_extract_audio)
-    monkeypatch.setattr(media, "download", fake_download)
+    monkeypatch.setattr(media, "fetch", fake_fetch)
     monkeypatch.setattr(media, "compose_timeline", fake_compose)
 
     async def fake_clone(sample, name):
         await maybe("clone")
+        counts["clone"] += 1
         return "voice-xyz"
 
     async def fake_tts(voice_id, text):
-        return b"AUDIO"
+        counts["tts"] += 1
+        return b"AUDIO-" + text.encode()  # distinct per line, like the real provider
 
     async def fake_tts_ts(voice_id, text):
+        counts["tts_ts"] += 1
         return b"AUDIO", [CaptionCue(text="oi", start=0.0, end=0.5)]
 
     async def fake_stt(path):
+        counts["stt"] += 1
         return "briefing transcrito"
 
     monkeypatch.setattr(worker.voice, "clone", fake_clone)
@@ -76,7 +84,8 @@ def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
     monkeypatch.setattr(worker.voice, "tts_with_timestamps", fake_tts_ts)
     monkeypatch.setattr(worker.voice, "stt", fake_stt)
 
-    async def fake_build_script(transcript):
+    async def fake_build_script(transcript, target_seconds):
+        counts["script"] += 1
         return {
             "narration": {"text": "Olá, sou eu aprimorado.", "tone": "confiante"},
             "scenes": [
@@ -91,23 +100,28 @@ def _patch_providers(monkeypatch, *, broll_ok=True, fail=None):
     monkeypatch.setattr(worker.script, "build_script", fake_build_script)
 
     async def fake_upload(path):
+        counts["upload"] += 1
         return f"https://fal.media/{path.split('/')[-1]}"
 
     async def fake_talking(image_url, audio_url, resolution="480p"):
+        counts["talking"] += 1
         return "https://fal.media/talk.mp4"
 
     async def fake_image(prompt, image_size="portrait_16_9"):
+        counts["image"] += 1
         if not broll_ok:
             raise RuntimeError("flux boom")
         return "https://fal.media/i.jpg"
 
     async def fake_broll(image_url, prompt, duration="5"):
+        counts["broll"] += 1
         return "https://fal.media/b.mp4"
 
     monkeypatch.setattr(worker.video, "upload", fake_upload)
     monkeypatch.setattr(worker.video, "talking", fake_talking)
     monkeypatch.setattr(worker.video, "image", fake_image)
     monkeypatch.setattr(worker.video, "broll", fake_broll)
+    return counts
 
 
 async def _seed_avatar(ctx) -> str:
@@ -143,6 +157,11 @@ async def _seed_ready_avatar_and_video(ctx) -> str:
         await enqueue(ctx.redis, s, kind="fast_generate", lane="interactive",
                       payload={"video_id": video_id})
         return video_id
+
+
+async def _latest_video_id(ctx) -> str:
+    async with ctx.session_factory() as s:
+        return (await s.execute(select(Video))).scalars().first().id
 
 
 async def test_process_one_returns_false_on_empty_queue(ctx):
@@ -229,3 +248,34 @@ async def test_avatar_prep_failure_marks_failed(ctx, monkeypatch):
     assert avatar.status == "failed"
     assert job.status == "failed"
     assert events[-1] == ("failed", {"kind": "avatar_prep"})
+
+
+async def test_avatar_prep_second_run_uses_cache(ctx, monkeypatch):
+    avatar_id = await _seed_avatar(ctx)
+    counts = _patch_providers(monkeypatch)
+
+    async def noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(worker, "publish", noop)
+    await worker.handle_avatar_prep(ctx, {"avatar_id": avatar_id})
+    assert counts["clone"] == 1 and counts["talking"] == 2
+    counts.clear()
+    await worker.handle_avatar_prep(ctx, {"avatar_id": avatar_id})
+    assert sum(counts.values()) == 0  # everything served from the cache
+
+
+async def test_fast_generate_second_run_uses_cache(ctx, monkeypatch):
+    await _seed_ready_avatar_and_video(ctx)
+    video_id = await _latest_video_id(ctx)
+    counts = _patch_providers(monkeypatch)
+
+    async def noop(*a, **k):
+        return None
+
+    monkeypatch.setattr(worker, "publish", noop)
+    await worker.handle_fast_generate(ctx, {"video_id": video_id})
+    assert counts["talking"] >= 1 and counts["script"] == 1
+    counts.clear()
+    await worker.handle_fast_generate(ctx, {"video_id": video_id})
+    assert sum(counts.values()) == 0
