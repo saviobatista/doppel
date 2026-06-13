@@ -143,6 +143,31 @@ async def test_gallery_lists_ready_videos_with_urls(app, client, device_token):
     assert videos[0]["video_id"] == v.id
 
 
+async def test_create_video_without_briefing(app, client, device_token):
+    avatar_id = await _seed_ready_avatar(app, device_token)
+    resp = await client.post(
+        "/v1/videos", headers={"X-Device-Token": device_token},
+        data={"avatar_id": avatar_id},
+    )
+    assert resp.status_code == 201
+
+
+async def test_delete_me_removes_rows_and_keeps_jobs(app, client, device_token):
+    avatar_id = await _seed_ready_avatar(app, device_token)
+    resp = await client.post(
+        "/v1/videos", headers={"X-Device-Token": device_token},
+        data={"avatar_id": avatar_id}, files={"briefing": ("b.webm", b"x", "audio/webm")},
+    )
+    assert resp.status_code == 201
+    resp = await client.delete("/v1/me", headers={"X-Device-Token": device_token})
+    assert resp.status_code == 204
+    async with app.state.session_factory() as s:
+        assert (await s.execute(select(Video))).scalars().all() == []
+        assert (await s.execute(select(Avatar))).scalars().all() == []
+        jobs = (await s.execute(select(Job))).scalars().all()
+        assert len(jobs) == 1  # fast_generate job kept for audit
+
+
 async def test_delete_me_revokes_token_and_rows(app, client, device_token):
     resp = await client.delete("/v1/me", headers={"X-Device-Token": device_token})
     assert resp.status_code == 204
