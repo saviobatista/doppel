@@ -47,12 +47,41 @@ async def clone(sample_path: str, name: str) -> str:
     return await anyio.to_thread.run_sync(_do)
 
 
-async def tts(voice_id: str, text: str) -> bytes:
+async def list_voice_ids() -> list[tuple[str, str]]:
+    """All voices on the account as (voice_id, name) — used to prune our orphans."""
+    def _do() -> list[tuple[str, str]]:
+        resp = _client().voices.get_all()
+        return [(v.voice_id, v.name or "") for v in resp.voices]
+
+    return await anyio.to_thread.run_sync(_do)
+
+
+async def delete(voice_id: str) -> None:
+    await anyio.to_thread.run_sync(lambda: _client().voices.delete(voice_id))
+
+
+async def prune_orphans(keep_ids: set[str], prefix: str = "doppel") -> int:
+    """Delete account voices we created (name starts with `prefix`) that are no
+    longer referenced by any avatar/voice. Frees space against the EL voice cap."""
+    deleted = 0
+    for voice_id, name in await list_voice_ids():
+        if name.startswith(prefix) and voice_id not in keep_ids:
+            try:
+                await delete(voice_id)
+                deleted += 1
+            except Exception as exc:  # best-effort cleanup
+                print(f"prune: failed to delete {voice_id}: {exc!r}")
+    return deleted
+
+
+async def tts(voice_id: str, text: str, model: str | None = None) -> bytes:
+    model_id = model or get_settings().elevenlabs_model
+
     def _do() -> bytes:
         stream = _client().text_to_speech.convert(
             voice_id=voice_id,
             text=text,
-            model_id=get_settings().elevenlabs_model,
+            model_id=model_id,
             output_format="mp3_44100_128",
         )
         return b"".join(stream)

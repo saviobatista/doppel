@@ -1,0 +1,28 @@
+{
+  "age_range": "30-40",
+  "gender_presentation": "male",
+  "ethnicity_appearance": "White / European",
+  "skin_tone": "fair",
+  "skin_undertone": "warm pink",
+  "body_frame": "broad, heavyset upper body",
+  "shoulders": "broad, wide",
+  "face_shape": "round to square, full cheeks",
+  "hair_length": "short",
+  "hair_color": "dark blond / light brown",
+  "hair_style": "short, textured on top, faded shorter on sides",
+  "hairline": "slightly receding at temples",
+  "facial_hair": "full beard and mustache, medium length, darker than hair with reddish-brown tones",
+  "eye_color": "light blue",
+  "eye_shape": "almond, slightly hooded",
+  "eye_set": "average set, level",
+  "eyebrow_description": "straight, medium thickness, blond-brown, low-set",
+  "nose_description": "straight medium-length bridge, rounded tip, moderate width",
+  "mouth_description": "mostly obscured by mustache and beard; lips relaxed, neutral",
+  "distinguishing_features": "bright light-blue eyes contrasting with darker beard; full beard with reddish-brown tint versus blond hair",
+  "expression": "neutral, relaxed, looking at camera",
+  "identity_specific_negatives": [
+    "full medium-length beard (darker reddish-brown than hair)",
+    "bright light-blue eyes",
+    "short textured dark-blond hair with slight temple recession"
+  ]
+}

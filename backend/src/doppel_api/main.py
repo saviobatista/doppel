@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from doppel_api.config import get_settings
 from doppel_api.db import init_db, make_engine, make_session_factory
-from doppel_api.routes import avatars, sessions, videos
+from doppel_api.routes import avatars, plans, sessions, videos, voices
 from doppel_api.storage import S3Storage, Storage
 
 
@@ -53,5 +53,7 @@ def create_app(
     app.include_router(sessions.router)
     app.include_router(avatars.router)
     app.include_router(videos.router)
+    app.include_router(plans.router)
+    app.include_router(voices.router)
 
     return app

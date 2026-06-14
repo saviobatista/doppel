@@ -66,6 +66,27 @@ async def extract_audio(src_path: str, out_path: str) -> str:
     return out_path
 
 
+async def silent_wav(out_path: str, seconds: float = 4.0) -> str:
+    """A short silent mono track — fed to the talking-avatar model it yields an
+    idle clip (mouth closed, natural blinks) to loop while waiting for input."""
+    args = ["-fflags", "+bitexact", "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=mono:sample_rate=44100",
+            "-t", f"{seconds}", "-ac", "1", "-ar", "44100",
+            "-map_metadata", "-1", out_path]
+    await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
+    return out_path
+
+
+async def boomerang(src_path: str, out_path: str) -> str:
+    """Forward + reversed copy concatenated, so the clip loops with no visible
+    seam (the idle 'standby' breathes/blinks back and forth naturally)."""
+    args = ["-i", src_path, "-filter_complex",
+            "[0:v]reverse[r];[0:v][r]concat=n=2:v=1:a=0,format=yuv420p[v]",
+            "-map", "[v]", "-an", "-movflags", "+faststart", out_path]
+    await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
+    return out_path
+
+
 def _compose_args(
     avatar_path: str, brolls: list[BrollClip], srt_path: str, out_path: str, font: str
 ) -> list[str]:

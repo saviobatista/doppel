@@ -1,0 +1,29 @@
+{
+  "age_range": "30-40",
+  "gender_presentation": "male",
+  "ethnicity_appearance": "White / European",
+  "skin_tone": "fair",
+  "skin_undertone": "neutral with slight warm flush on cheeks",
+  "body_frame": "solid, broad-built",
+  "shoulders": "broad",
+  "face_shape": "round-to-square, full cheeks with strong jaw",
+  "hair_length": "short",
+  "hair_color": "dark blond with faint warm tones",
+  "hair_style": "short on the sides, slightly longer textured top swept up and forward",
+  "hairline": "slight recession at the temples, otherwise even",
+  "facial_hair": "full beard and mustache, medium length, dark blond, slightly darker than the hair",
+  "eye_color": "light blue",
+  "eye_shape": "almond, moderately deep-set",
+  "eye_set": "average spacing",
+  "eyebrow_description": "straight, medium thickness, slightly arched, matching hair tone",
+  "nose_description": "straight bridge, medium width, rounded tip",
+  "mouth_description": "medium-width lips, upper lip mostly covered by mustache, neutral closed mouth",
+  "distinguishing_features": "full cheeks, strong square jaw framed by beard, faint creases under eyes, slight temple recession, broad forehead",
+  "expression": "neutral, calm, looking directly at camera",
+  "identity_specific_negatives": [
+    "do not tint the hair or beard ginger/red/auburn",
+    "do not change eye color from light blue",
+    "do not slim or sharpen the face shape",
+    "do not lower the hairline or remove temple recession"
+  ]
+}

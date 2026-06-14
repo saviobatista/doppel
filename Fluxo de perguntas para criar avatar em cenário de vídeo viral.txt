@@ -1,0 +1,263 @@
+﻿Fluxo de perguntas para criar avatar em cenário de vídeo viral
+1. Qual é o tipo de impacto que você quer causar?
+Pergunta para o usuário:
+Quando alguém bater o olho no vídeo, o que deve sentir?
+Opções:
+* Luxo
+* Autoridade
+* Curiosidade
+* Mistério
+* Sucesso
+* Poder
+* Vida de criador
+* Profissionalismo
+* Tecnologia
+* Polêmica
+* Transformação
+* Bastidores
+* Humor
+* Desejo de assistir
+________________
+
+
+2. Qual é o universo do vídeo?
+Pergunta para o usuário:
+Qual mundo esse personagem representa?
+Opções:
+* Empresário de sucesso
+* Criador de conteúdo
+* Especialista/mentor
+* Podcast
+* Vida de luxo
+* Tecnologia e inteligência artificial
+* Finanças
+* Marketing digital
+* Moda/beleza
+* Fitness
+* Música
+* Humor
+* Lifestyle
+* Bastidores de produção
+* Carros
+* Viagem
+* Motivacional
+________________
+
+
+3. Escolha o cenário principal
+Pergunta para o usuário:
+Onde você quer que o personagem esteja?
+Opções fortes para viral:
+Cenários de autoridade
+* Escritório executivo moderno
+* Sala de reunião premium
+* Estúdio corporativo
+* Biblioteca elegante
+* Cobertura com vista da cidade
+* Escritório com parede de vidro
+* Sala de CEO
+* Ambiente com telas e gráficos
+Cenários de podcast
+* Mesa de podcast com microfones
+* Estúdio escuro com luzes LED
+* Fundo com prateleiras e neon
+* Podcast premium com poltronas
+* Mesa redonda com equipamentos
+* Fundo acústico profissional
+* Estúdio com câmera e luz aparente
+Cenários de luxo
+* Dentro de carro de luxo
+* Banco traseiro de carro executivo
+* Garagem com carros esportivos
+* Lounge de hotel cinco estrelas
+* Jato particular
+* Restaurante sofisticado
+* Mansão moderna
+* Yacht/barco de luxo
+* Elevador espelhado premium
+Cenários de criador de conteúdo
+* Setup gamer/produtividade
+* Estúdio com ring light e câmera
+* Quarto moderno de creator
+* Mesa com notebook, celular e luzes
+* Fundo com telas coloridas
+* Estúdio de gravação vertical
+* Ambiente jovem com LEDs
+Cenários tecnológicos
+* Sala futurista com telas
+* Laboratório de IA
+* Fundo com hologramas
+* Escritório tech azul escuro
+* Data center cinematográfico
+* Painel digital gigante
+* Sala de controle
+* Ambiente cyberpunk elegante
+Cenários urbanos
+* Rua à noite com neon
+* Avenida de cidade grande
+* Prédio empresarial ao fundo
+* Estacionamento de luxo
+* Café moderno
+* Aeroporto executivo
+* Hotel urbano
+* Rooftop com skyline
+________________
+
+
+4. Qual é o nível de ostentação do cenário?
+Pergunta para o usuário:
+O cenário deve parecer mais simples ou mais poderoso?
+Opções:
+* Simples e realista
+* Profissional
+* Premium
+* Muito luxuoso
+* Cinematográfico
+* Exagerado para chamar atenção
+* Surpreendente
+* Misterioso
+* Viral e chamativo
+________________
+
+
+5. Qual detalhe precisa aparecer no fundo?
+Pergunta para o usuário:
+O que no cenário ajuda a contar a história?
+Opções:
+* Microfone de podcast
+* Notebook aberto
+* Telas grandes
+* Luzes LED
+* Livros
+* Quadro abstrato
+* Planta elegante
+* Cidade ao fundo
+* Volante de carro de luxo
+* Banco de couro
+* Mesa de madeira premium
+* Câmera de gravação
+* Ring light
+* Garrafa de água premium
+* Café
+* Fone de ouvido
+* Dinheiro/elementos financeiros
+* Gráficos em tela
+* Nenhum objeto, cenário limpo
+________________
+
+
+6. Como o fundo deve aparecer?
+Pergunta para o usuário:
+Você quer ver bastante o cenário ou só sentir o ambiente?
+Opções:
+* Fundo bem visível
+* Fundo levemente desfocado
+* Fundo muito desfocado
+* Personagem grande com pouco cenário
+* Personagem menor mostrando muito cenário
+* Fundo com espaço para texto
+* Fundo dramático e profundo
+* Fundo limpo e minimalista
+________________
+
+
+7. Qual clima de luz combina com o vídeo?
+Pergunta para o usuário:
+Qual iluminação deixa esse cenário mais forte?
+Opções:
+* Luz de podcast com LED
+* Luz cinematográfica escura
+* Luz de escritório premium
+* Luz quente de fim de tarde
+* Luz azul tecnológica
+* Luz de carro à noite
+* Luz de cidade noturna
+* Luz limpa de estúdio
+* Contraluz poderoso
+* Luz dramática com sombras
+________________
+
+
+8. Qual paleta de cor deve dominar?
+Pergunta para o usuário:
+Quais cores deixam o vídeo mais chamativo?
+Opções:
+* Preto e dourado
+* Azul escuro e cinza
+* Roxo e azul neon
+* Verde oliva e off-white
+* Marrom e bege premium
+* Vermelho e preto
+* Branco e cinza clean
+* Laranja quente
+* Tons escuros cinematográficos
+* Deixar a IA escolher
+________________
+
+
+9. Qual enquadramento ajuda mais no vídeo viral?
+Pergunta para o usuário:
+Como o personagem deve aparecer no cenário?
+Opções:
+* Meio corpo, estilo Reels/TikTok
+* Close com fundo forte
+* Sentado em mesa de podcast
+* Sentado em cadeira executiva
+* Dentro do carro olhando para câmera
+* Em pé no escritório
+* Encostado na mesa
+* Plano mais aberto mostrando o ambiente
+* Formato vertical com espaço para legenda
+* Formato capa de vídeo/thumbnail
+________________
+
+
+10. O que não pode aparecer?
+Pergunta para o usuário:
+O que você quer evitar?
+Opções:
+* Fundo bagunçado
+* Aparência artificial
+* Cenário pobre em detalhes
+* Muitas cores
+* Logos ou marcas
+* Texto na imagem
+* Objetos deformados
+* Luz exagerada
+* Cara de desenho
+* Cenário genérico
+* Fundo sem profundidade
+* Rosto muito artificial
+________________
+
+
+Fluxo curto ideal para app
+1. Qual sensação o vídeo deve causar?
+2. Qual universo o personagem representa?
+3. Escolha o cenário principal.
+4. Escolha o nível de luxo/impacto.
+5. Escolha os objetos importantes do fundo.
+6. Escolha se o fundo será visível ou desfocado.
+7. Escolha a iluminação.
+8. Escolha a paleta de cores.
+9. Escolha o enquadramento.
+10. Escolha o que não pode aparecer.
+________________
+
+
+Exemplo de resposta do usuário
+Sensação: autoridade e luxo
+Universo: criador de conteúdo especialista
+Cenário: estúdio de podcast premium
+Impacto: cinematográfico e poderoso
+Objetos: microfone, mesa escura, luzes LED e câmera ao fundo
+Fundo: visível, mas com leve desfoque
+Iluminação: luz de podcast com LED azul e contraluz
+Cores: preto, azul escuro e dourado
+Enquadramento: meio corpo vertical com espaço para legenda
+Evitar: texto, logos, fundo bagunçado e aparência artificial
+________________
+
+
+Prompt final gerado pela API
+Create a viral vertical avatar image for short-form video, featuring a confident expert creator inside a premium podcast studio. The scenario is the main focus: dark elegant podcast table, professional microphone, cinematic LED lights, subtle camera equipment in the background, premium black, deep blue and gold color palette. The character appears in a half-body vertical composition with space for captions, seated confidently, with the background visible but slightly blurred. Cinematic podcast lighting, strong backlight, high contrast, realistic professional atmosphere, viral social media thumbnail style, ultra realistic, sharp details, clean composition, no text, no logos, no clutter, no artificial look.

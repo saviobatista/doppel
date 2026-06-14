@@ -39,6 +39,23 @@ async def image(prompt: str, image_size: str = "portrait_16_9") -> str:
     return result["images"][0]["url"]
 
 
+async def edit_image(image_url: str, prompt: str, width: int = 1080, height: int = 1920) -> str:
+    """Identity-lock image edit: restyle the scene around the person in `image_url`."""
+    result = await asyncio.wait_for(
+        fal_client.subscribe_async(
+            get_settings().fal_edit_model,
+            arguments={
+                "prompt": prompt,
+                "image_urls": [image_url],
+                "image_size": {"width": width, "height": height},
+                "num_images": 1,
+            },
+        ),
+        timeout=GENERATE_TIMEOUT,
+    )
+    return result["images"][0]["url"]
+
+
 async def broll(image_url: str, prompt: str, duration: str = "5") -> str:
     result = await asyncio.wait_for(
         fal_client.subscribe_async(

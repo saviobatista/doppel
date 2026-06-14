@@ -59,6 +59,65 @@ class Video(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class Plan(Base):
+    """A Video Agent artifact: the researched, scripted, directed plan a user
+    reviews and edits before submitting it for generation.
+
+    `brief` holds the request inputs (prompt, chosen avatar/voice, duration,
+    orientation, language). `plan` holds the emitted artifact JSON (title, style,
+    research, script scenes with direction + transitions, audio, resources).
+    `video_id` links the Video produced once the plan is generated.
+    """
+
+    __tablename__ = "plans"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    avatar_id: Mapped[str | None] = mapped_column(
+        ForeignKey("avatars.id"), index=True, default=None
+    )
+    # researching -> scripting -> directing -> ready -> generating -> generated | failed
+    status: Mapped[str] = mapped_column(String(16), default="researching")
+    brief: Mapped[dict] = mapped_column(JSON, default=dict)
+    plan: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # Finalized artifact manifest for the session: durable S3 keys for every asset
+    # (plan snapshot + media/overlays/audio/footage) plus counts/metadata.
+    bundle: Mapped[dict | None] = mapped_column(JSON, default=None)
+    video_id: Mapped[str | None] = mapped_column(ForeignKey("videos.id"), default=None)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class Voice(Base):
+    """A reusable voice: cloned from an avatar's footage or from a freshly
+    recorded/uploaded sample. Several provider/model `candidates` are generated
+    for the user to A/B, then one is `selected` (its external id + provider).
+
+    A selected voice can be attached to an avatar (the avatar's `voice_id` asset)
+    or used on its own as a picker source for the Video Agent.
+    """
+
+    __tablename__ = "voices"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)
+    device_id: Mapped[str] = mapped_column(ForeignKey("devices.id"), index=True)
+    # The avatar this voice was derived from / attached to (footage clones, or an
+    # explicit attach). Null for standalone voices not tied to any avatar.
+    avatar_id: Mapped[str | None] = mapped_column(
+        ForeignKey("avatars.id"), index=True, default=None
+    )
+    label: Mapped[str] = mapped_column(String(120), default="Minha voz")
+    # cloning -> ready -> failed
+    status: Mapped[str] = mapped_column(String(16), default="cloning")
+    # "footage" | "recorded" | "uploaded"
+    source: Mapped[str] = mapped_column(String(16), default="recorded")
+    # The chosen candidate after selection (external provider id + which provider).
+    provider: Mapped[str | None] = mapped_column(String(32), default=None)
+    external_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    # [{provider, label, model, external_id, preview_key, status}] — the A/B options.
+    candidates: Mapped[dict | None] = mapped_column(JSON, default=None)
+    # {sample: "voices/{id}/sample.wav", ...}
+    assets: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class Job(Base):
     __tablename__ = "jobs"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_id)

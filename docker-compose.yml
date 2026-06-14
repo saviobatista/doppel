@@ -34,6 +34,7 @@ services:
     environment: &doppel_env
       PYTHONUNBUFFERED: "1"
       CACHE_DIR: /app/cache
+      DOPPEL_CORS_ORIGINS: "http://localhost:3100,http://localhost:3000,http://localhost:5173,http://localhost:5180"
       DOPPEL_DATABASE_URL: postgresql+asyncpg://doppel:doppel@postgres:5432/doppel
       DOPPEL_REDIS_URL: redis://redis:6379/0
       DOPPEL_S3_ENDPOINT: http://floci:4566

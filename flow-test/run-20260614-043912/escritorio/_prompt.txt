@@ -1,0 +1,16 @@
+=== SUBJECT IDENTITY LOCK — KEEP THE PERSON FROM THE SOURCE IMAGE ===
+This is an image edit of a real, specific individual. Keep the exact same person from the source image: same facial identity, bone structure, proportions, age, and body weight; the likeness must stay recognizable and consistent across every output. Preserve the colors exactly as they appear in the source — especially hair color, beard color, eyebrow color, and eye color — do not shift their hue, saturation, or warmth.
+Subject: 30-40 male, White / European, fair skin with a neutral with slight warm flush on cheeks undertone and natural skin texture (visible pores, subtle imperfections — not airbrushed).
+Build: solid, broad-built frame with broad, and a round-to-square, full cheeks with strong jaw face.
+Hair: short dark blond with faint warm tones hair, short on the sides, slightly longer textured top swept up and forward, slight recession at the temples, otherwise even. Keep the natural hairline — do not lower, thicken, raise, or restyle it.
+Facial hair: full beard and mustache, medium length, dark blond, slightly darker than the hair.
+Eyes: light blue, almond, moderately deep-set, average spacing, natural gaze.
+Eyebrows: straight, medium thickness, slightly arched, matching hair tone.
+Nose: straight bridge, medium width, rounded tip.
+Mouth: medium-width lips, upper lip mostly covered by mustache, neutral closed mouth.
+Distinguishing features: full cheeks, strong square jaw framed by beard, faint creases under eyes, slight temple recession, broad forehead.
+Expression baseline: neutral, calm, looking directly at camera — adjustable per scene, but the underlying facial structure must not change.
+Avoid drifting from the source: do not tint the hair or beard ginger/red/auburn, do not change eye color from light blue, do not slim or sharpen the face shape, do not lower the hairline or remove temple recession.
+=== SCENE / STYLE (the only part you swap) ===
+Seated in a modern executive office with a softly blurred glass-wall city view, warm premium lighting, confident and approachable, half-body vertical 9:16 framing with space for captions, photorealistic.
+Photorealistic result with natural skin; no beauty-filter or airbrushing, no warping of facial features, no added text, logos, or watermark.

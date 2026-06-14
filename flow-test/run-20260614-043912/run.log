@@ -1,0 +1,55 @@
+01:39:12  INFO    === avatar looks flow test ===
+01:39:12  INFO    face frame : geUHU_sgdXg4IXe4BMG2g_image (1).png (1296 KB)
+01:39:12  INFO    output dir : /home/bmv/brasio/doppel/flow-test/run-20260614-043912
+01:39:12  INFO    logfile    : /home/bmv/brasio/doppel/flow-test/run-20260614-043912/run.log
+01:39:12  INFO    looks      : Estúdio, Escritório, Cinematográfico
+01:39:12  INFO    models     : nano-banana-2, seedream-v4.5
+01:39:12  INFO    prompt prep: claude-opus-4-7
+01:39:12  INFO    step 1/4: extracting facial attributes via claude-opus-4-7...
+01:39:25  INFO      attributes extracted via Claude in 12.3s
+01:39:25  INFO        age_range                    30-40
+01:39:25  INFO        gender_presentation          male
+01:39:25  INFO        ethnicity_appearance         White / European
+01:39:25  INFO        skin_tone                    fair
+01:39:25  INFO        skin_undertone               neutral with slight warm flush on cheeks
+01:39:25  INFO        body_frame                   solid, broad-built
+01:39:25  INFO        shoulders                    broad
+01:39:25  INFO        face_shape                   round-to-square, full cheeks with strong jaw
+01:39:25  INFO        hair_length                  short
+01:39:25  INFO        hair_color                   dark blond with faint warm tones
+01:39:25  INFO        hair_style                   short on the sides, slightly longer textured top swept up and forward
+01:39:25  INFO        hairline                     slight recession at the temples, otherwise even
+01:39:25  INFO        facial_hair                  full beard and mustache, medium length, dark blond, slightly darker than the hair
+01:39:25  INFO        eye_color                    light blue
+01:39:25  INFO        eye_shape                    almond, moderately deep-set
+01:39:25  INFO        eye_set                      average spacing
+01:39:25  INFO        eyebrow_description          straight, medium thickness, slightly arched, matching hair tone
+01:39:25  INFO        nose_description             straight bridge, medium width, rounded tip
+01:39:25  INFO        mouth_description            medium-width lips, upper lip mostly covered by mustache, neutral closed mouth
+01:39:25  INFO        distinguishing_features      full cheeks, strong square jaw framed by beard, faint creases under eyes, slight temple recession, broad forehead
+01:39:25  INFO        expression                   neutral, calm, looking directly at camera
+01:39:25  INFO        identity_specific_negatives  ['do not tint the hair or beard ginger/red/auburn', 'do not change eye color from light blue', 'do not slim or sharpen the face shape', 'do not lower the hairline or remove temple recession']
+01:39:25  INFO    step 2/4: building identity-lock base prompt...
+01:39:25  INFO      base prompt: 2108 chars -> flow-test/_identity_prompt.txt
+01:39:25  INFO    step 3/4: uploading face frame to fal...
+01:39:26  INFO      uploaded -> https://v3b.fal.media/files/b/0a9e380c/1VpAronCNxyO49QFoGngL_geUHU_sgdXg4IXe4BMG2g_image%20%281%29.png
+01:39:26  INFO    step 4/4: generating 3 looks x 2 models = 6 images...
+01:39:26  INFO    [estudio/nano-banana-2] -> fal-ai/nano-banana-2/edit submitting (prompt=2318 chars)
+01:39:26  INFO    [estudio/seedream-v4.5] -> fal-ai/bytedance/seedream/v4.5/edit submitting (prompt=2318 chars)
+01:39:26  INFO    [escritorio/nano-banana-2] -> fal-ai/nano-banana-2/edit submitting (prompt=2296 chars)
+01:39:26  INFO    [escritorio/seedream-v4.5] -> fal-ai/bytedance/seedream/v4.5/edit submitting (prompt=2296 chars)
+01:39:54  INFO    [estudio/seedream-v4.5] OK in 27.9s -> seedream-v4.5.png (3848 KB)
+01:39:54  INFO    [cinematografico/nano-banana-2] -> fal-ai/nano-banana-2/edit submitting (prompt=2322 chars)
+01:39:55  INFO    [escritorio/nano-banana-2] OK in 28.2s -> nano-banana-2.png (5289 KB)
+01:39:55  INFO    [cinematografico/seedream-v4.5] -> fal-ai/bytedance/seedream/v4.5/edit submitting (prompt=2322 chars)
+01:39:56  INFO    [escritorio/seedream-v4.5] OK in 29.3s -> seedream-v4.5.png (3790 KB)
+01:39:56  INFO    [estudio/nano-banana-2] OK in 29.9s -> nano-banana-2.png (6197 KB)
+01:40:18  INFO    [cinematografico/nano-banana-2] OK in 24.2s -> nano-banana-2.png (5514 KB)
+01:40:26  INFO    [cinematografico/seedream-v4.5] OK in 31.7s -> seedream-v4.5.png (3822 KB)
+01:40:26  INFO    === done: 6/6 images saved under /home/bmv/brasio/doppel/flow-test/run-20260614-043912 ===
+01:40:26  INFO      estudio/seedream-v4.5        ok   27.9s
+01:40:26  INFO      escritorio/nano-banana-2     ok   28.2s
+01:40:26  INFO      escritorio/seedream-v4.5     ok   29.3s
+01:40:26  INFO      estudio/nano-banana-2        ok   29.9s
+01:40:26  INFO      cinematografico/nano-banana-2 ok   24.2s
+01:40:26  INFO      cinematografico/seedream-v4.5 ok   31.7s
