@@ -27,7 +27,10 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
-RUN npm run obfuscate
+# Ofuscacao desativada: quebrava o runtime do Next/Turbopack em producao
+# (Uncaught TypeError no turbopack-*.js). Reativar depois com escopo restrito
+# apenas aos chunks da app (static/chunks/app/**), sem tocar o runtime.
+# RUN npm run obfuscate
 
 # Runner: imagem minima com o servidor standalone.
 FROM node:22-alpine AS runner
