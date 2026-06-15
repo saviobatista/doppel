@@ -6,6 +6,7 @@ set -e
 # aplicou antes; aqui vira no-op.
 case "$1" in
   uvicorn)
+    cd /app
     echo "entrypoint: alembic upgrade head"
     alembic upgrade head
     ;;

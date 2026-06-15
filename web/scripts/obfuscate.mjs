@@ -32,7 +32,13 @@ async function* jsFiles(dir) {
 let count = 0;
 for await (const file of jsFiles(ROOT)) {
   const code = await readFile(file, "utf8");
-  const out = JavaScriptObfuscator.obfuscate(code, OPTIONS).getObfuscatedCode();
+  let out;
+  try {
+    out = JavaScriptObfuscator.obfuscate(code, OPTIONS).getObfuscatedCode();
+  } catch (err) {
+    console.error(`obfuscate: skipping ${file}: ${err.message}`);
+    continue;
+  }
   await writeFile(file, out);
   count += 1;
 }
