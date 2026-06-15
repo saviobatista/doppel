@@ -11,7 +11,7 @@ from doppel_api.queue import enqueue
 
 router = APIRouter()
 
-MAX_UPLOAD_BYTES = 64 * 1024 * 1024
+MAX_UPLOAD_BYTES = 256 * 1024 * 1024  # 256 MB: acomoda gravacoes de avatar mais longas
 
 
 async def _look_views(avatar: Avatar, storage) -> list[dict]:

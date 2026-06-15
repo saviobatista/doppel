@@ -84,6 +84,12 @@ export async function createAvatar(
     const ws = new WebSocket(wsUrl);
     ws.binaryType = "arraybuffer";
     let avatarId = "";
+    let settled = false;
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
     ws.onopen = () => ws.send(JSON.stringify({ mime, label: label ?? "" }));
     ws.onmessage = async (ev) => {
       let msg: Record<string, unknown>;
@@ -94,7 +100,7 @@ export async function createAvatar(
       }
       if (msg.error) {
         ws.close();
-        reject(new Error(String(msg.error)));
+        finish(() => reject(new Error(String(msg.error))));
         return;
       }
       if (msg.avatar_id && !avatarId) {
@@ -103,11 +109,22 @@ export async function createAvatar(
         ws.send(JSON.stringify({ done: true }));
         return;
       }
-      if (msg.status === "processing") resolve(avatarId);
+      if (msg.status === "processing") finish(() => resolve(avatarId));
     };
-    ws.onerror = () => reject(new Error("avatar upload failed"));
-    ws.onclose = () => {
-      if (!avatarId) reject(new Error("avatar upload closed early"));
+    ws.onerror = () => finish(() => reject(new Error("avatar upload failed")));
+    ws.onclose = (ev) => {
+      // Sempre encerra a Promise. O servidor fecha sem "processing" quando o
+      // upload excede o limite (code 1009) ou aborta; antes ficava pendente
+      // eterno (UI presa em "Enviando...").
+      finish(() =>
+        reject(
+          new Error(
+            ev.code === 1009
+              ? "O vídeo é muito grande. Grave um clipe mais curto e tente novamente."
+              : "A conexão encerrou antes de concluir o envio. Tente novamente.",
+          ),
+        ),
+      );
     };
   });
 }
