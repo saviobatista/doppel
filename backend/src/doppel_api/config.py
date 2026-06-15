@@ -126,7 +126,7 @@ class Settings(BaseSettings):
     # Still generator for b-roll scenes with no scraped media: "fal" (flux/schnell).
     t2i_driver: str = Field(default="fal", validation_alias=AliasChoices("T2I_DRIVER"))
     # Music bed gain (linear) and whether to duck it under the voiceover.
-    music_gain: float = Field(default=0.22, validation_alias=AliasChoices("MUSIC_GAIN"))
+    music_gain: float = Field(default=0.10, validation_alias=AliasChoices("MUSIC_GAIN"))
     cache_dir: str = Field(default="cache", validation_alias=AliasChoices("CACHE_DIR"))
     video_target_seconds: int = Field(
         default=10, validation_alias=AliasChoices("VIDEO_TARGET_SECONDS")

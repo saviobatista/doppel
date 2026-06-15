@@ -41,6 +41,57 @@ def build_srt(cues: list[CaptionCue]) -> str:
     return "\n".join(blocks)
 
 
+def _ass_ts(seconds: float) -> str:
+    cs = round(max(0.0, seconds) * 100)
+    h, cs = divmod(cs, 360_000)
+    m, cs = divmod(cs, 6_000)
+    s, cs = divmod(cs, 100)
+    return f"{h:d}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+def build_ass(
+    cues: list[CaptionCue],
+    font: str = "DejaVu Sans",
+    *,
+    width: int = 1080,
+    height: int = 1920,
+    fontsize: int = 64,
+    margin_v: int = 230,
+) -> str:
+    """An ASS subtitle script with an explicit PlayRes so positioning is in real
+    target pixels (the bare `subtitles` filter defaults to a 384x288 PlayRes,
+    which is what pushes MarginV-based captions up to the middle of the frame).
+    Captions sit in the lower band (Alignment=2 = bottom-center)."""
+    style = (
+        f"Style: Default,{font},{fontsize},&H00FFFFFF,&H000000FF,&H00101010,&H64000000,"
+        f"1,0,0,0,100,100,0,0,1,4,2,2,90,90,{margin_v},1"
+    )
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        f"PlayResX: {width}",
+        f"PlayResY: {height}",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        ("Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+         "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
+         "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
+         "MarginR, MarginV, Encoding"),
+        style,
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for cue in cues:
+        text = cue.text.replace("\n", "\\N").replace("{", "(").replace("}", ")")
+        lines.append(
+            f"Dialogue: 0,{_ass_ts(cue.start)},{_ass_ts(cue.end)},Default,,0,0,0,,{text}"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _run_ffmpeg(args: list[str]) -> None:
     try:
         subprocess.run(["ffmpeg", "-y", *args], check=True, capture_output=True)
@@ -55,6 +106,51 @@ def _run_ffmpeg(args: list[str]) -> None:
 async def extract_frame(src_path: str, out_path: str) -> str:
     args = ["-fflags", "+bitexact", "-ss", "1", "-i", src_path,
             "-frames:v", "1", "-q:v", "2", "-map_metadata", "-1", out_path]
+    await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
+    return out_path
+
+
+def _probe_duration_sync(path: str) -> float:
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", path],
+            check=True, capture_output=True,
+        )
+        return float(out.stdout.decode().strip())
+    except (subprocess.CalledProcessError, ValueError):
+        return 0.0
+
+
+async def extract_candidate_frames(src_path: str, out_dir: str, count: int = 8) -> list[str]:
+    """Grab `count` evenly-spaced frames across the clip (skipping the very start/
+    end where the subject is settling) as JPEGs — candidates for best-frame
+    selection. Falls back to a single t=1s frame when the duration is unknown."""
+
+    def _do() -> list[str]:
+        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        dur = _probe_duration_sync(src_path)
+        if dur <= 0.5:
+            p = str(Path(out_dir) / "cand_00.jpg")
+            _run_ffmpeg(["-ss", "1", "-i", src_path, "-frames:v", "1", "-q:v", "3",
+                         "-map_metadata", "-1", p])
+            return [p]
+        lo, hi = max(0.3, dur * 0.06), max(0.6, dur * 0.94)
+        paths: list[str] = []
+        for i in range(count):
+            ts = lo + (hi - lo) * i / max(1, count - 1)
+            p = str(Path(out_dir) / f"cand_{i:02d}.jpg")
+            _run_ffmpeg(["-ss", f"{ts:.3f}", "-i", src_path, "-frames:v", "1",
+                         "-q:v", "3", "-map_metadata", "-1", p])
+            paths.append(p)
+        return paths
+
+    return await anyio.to_thread.run_sync(_do)
+
+
+async def transcode_image(src_path: str, out_path: str) -> str:
+    """Re-encode an image to the container/codec implied by `out_path` (e.g. jpg->png)."""
+    args = ["-fflags", "+bitexact", "-i", src_path, "-map_metadata", "-1", out_path]
     await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
     return out_path
 

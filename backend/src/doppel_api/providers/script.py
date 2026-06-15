@@ -184,3 +184,66 @@ async def extract_environment(image_bytes: bytes, *, media_type: str = "image/pn
     """Vision call: a short description of the setting behind the subject (for looks)."""
     b64 = base64.b64encode(image_bytes).decode("ascii")
     return await anyio.to_thread.run_sync(_env_call, b64, media_type)
+
+
+# --- Avatar first frame: pick the best candidate frame for the reference photo ---
+
+_BEST_FRAME_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "best_index": {
+            "type": "integer",
+            "description": "0-based index of the single best frame for an avatar headshot.",
+        },
+        "reason": {"type": "string", "description": "Brief reason for the choice."},
+    },
+    "required": ["best_index"],
+}
+
+_BEST_FRAME_SYSTEM = (
+    "You select the best reference frame for a talking-avatar headshot from a set of "
+    "candidate video frames. The chosen frame becomes the avatar's first frame and the "
+    "source for image edits, so it must be the cleanest, most neutral, front-facing shot. "
+    "Prefer the frame where, in priority order: the subject faces the camera straight-on "
+    "(head level, not turned or tilted, minimal yaw/pitch); both eyes are open and looking "
+    "directly into the lens (no mid-blink, no glancing away); the face is sharp and in "
+    "focus (no motion blur); the subject is well framed and roughly centered with the whole "
+    "head visible and not cropped; a calm, natural, closed-mouth or gentle expression (avoid "
+    "mid-speech mouth shapes, talking, yawns, or exaggerated faces); even, flattering "
+    "lighting with no harsh shadow or blow-out; nothing (hand, mic, object) covering the "
+    "face. Emit ONLY the emit_best_frame tool with the index of that frame."
+)
+
+
+def _best_frame_call(images_b64: list[str], media_type: str) -> int:
+    content: list[dict] = []
+    for i, b64 in enumerate(images_b64):
+        content.append({"type": "text", "text": f"Frame {i}:"})
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": media_type, "data": b64},
+        })
+    content.append({"type": "text", "text": (
+        "Pick the single best frame index for the avatar's front-facing reference photo."
+    )})
+    resp = _client().messages.create(
+        model=get_settings().anthropic_prompt_model,
+        max_tokens=300,
+        system=_BEST_FRAME_SYSTEM,
+        messages=[{"role": "user", "content": content}],
+        tools=[{
+            "name": "emit_best_frame",
+            "description": "Emit the index of the best front-facing avatar reference frame.",
+            "input_schema": _BEST_FRAME_SCHEMA,
+        }],
+        tool_choice={"type": "tool", "name": "emit_best_frame"},
+    )
+    chosen = next(b.input for b in resp.content if b.type == "tool_use")
+    return int(chosen["best_index"])
+
+
+async def pick_best_frame(frames: list[bytes], *, media_type: str = "image/jpeg") -> int:
+    """Vision call: choose the most front-facing, centered, in-focus frame (the one
+    where the subject looks straight into the camera) for the avatar reference."""
+    b64 = [base64.b64encode(f).decode("ascii") for f in frames]
+    return await anyio.to_thread.run_sync(_best_frame_call, b64, media_type)

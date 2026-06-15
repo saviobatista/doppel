@@ -53,6 +53,10 @@ class PlanCreate(BaseModel):
     voice_id: str | None = None
     avatar_label: str | None = None
     voice_label: str | None = None
+    # Optional avatar "look": index into the avatar's generated looks. When set,
+    # that look's image replaces the avatar's first frame during generation.
+    look_index: int | None = None
+    look_label: str | None = None
     duration_seconds: int = 40
     orientation: Literal["portrait", "landscape"] = "portrait"
     language: str = "pt-BR"

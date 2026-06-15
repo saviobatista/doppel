@@ -8,12 +8,16 @@ export const metadata = {
 export default async function AgenteStarterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ avatar?: string }>;
+  searchParams: Promise<{ avatar?: string; look?: string }>;
 }) {
-  const { avatar } = await searchParams;
+  const { avatar, look } = await searchParams;
+  const lookIndex = look != null && look !== "" ? Number(look) : null;
   return (
     <Workspace>
-      <NewAgentStarter initialAvatarId={avatar} />
+      <NewAgentStarter
+        initialAvatarId={avatar}
+        initialLook={Number.isFinite(lookIndex) ? lookIndex : null}
+      />
     </Workspace>
   );
 }

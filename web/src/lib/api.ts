@@ -240,6 +240,14 @@ export async function selectVoice(
   return resp.json();
 }
 
+/** A playable preview URL for any voice (synthesized + cached server-side on first call). */
+export async function getVoicePreview(voiceId: string): Promise<string> {
+  await ensureSession();
+  const resp = await fetch(`${BASE}/v1/voices/${voiceId}/preview`, { headers: authHeaders() });
+  if (!resp.ok) throw new Error(`voice preview failed: ${resp.status}`);
+  return (await resp.json()).preview_url as string;
+}
+
 export function subscribeVoice(voiceId: string, onEvent: SseHandler, signal?: AbortSignal) {
   return consumeSse(`/v1/voices/${voiceId}/events`, onEvent, signal);
 }

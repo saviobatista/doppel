@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from doppel_api.config import get_settings
+from doppel_api.constants import VOICE_PREVIEW_LINE
 from doppel_api.deps import get_device, get_redis, get_session, get_storage
 from doppel_api.events import HEARTBEAT, sse_comment, sse_format, subscription
 from doppel_api.models import Avatar, Device, Voice
+from doppel_api.providers import voice as voice_tts
 from doppel_api.queue import enqueue
 
 router = APIRouter()
@@ -148,6 +150,54 @@ async def get_voice(
     if voice is None:
         raise HTTPException(status_code=404)
     return await _voice_detail(voice, storage)
+
+
+@router.get("/v1/voices/{voice_id}/preview")
+async def voice_preview(
+    voice_id: str,
+    device: Device = Depends(get_device),
+    session=Depends(get_session),
+    storage=Depends(get_storage),
+) -> dict:
+    """A playable preview URL for any voice. Reuses a candidate preview stored at
+    clone time; for footage voices (no stored sample) it synthesizes one short
+    line on first request and caches it so later plays are instant."""
+    voice = (
+        await session.execute(
+            select(Voice).where(Voice.id == voice_id, Voice.device_id == device.id)
+        )
+    ).scalar_one_or_none()
+    if voice is None:
+        raise HTTPException(status_code=404)
+
+    key = (voice.assets or {}).get("preview_key")
+    if not key:
+        # Prefer the candidate matching the selected provider; else any with audio.
+        cands = voice.candidates or []
+        chosen = next(
+            (c for c in cands
+             if c.get("external_id") == voice.external_id and c.get("preview_key")),
+            None,
+        ) or next((c for c in cands if c.get("preview_key")), None)
+        if chosen:
+            key = chosen["preview_key"]
+
+    if not key:
+        external_id = voice.external_id or next(
+            (c.get("external_id") for c in (voice.candidates or []) if c.get("external_id")), None
+        )
+        if not external_id:
+            raise HTTPException(status_code=422, detail="voice has no synthesizable id")
+        try:
+            audio = await voice_tts.tts(external_id, VOICE_PREVIEW_LINE)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"preview synthesis failed: {exc}") from exc
+        key = f"voices/{voice_id}/preview.mp3"
+        await storage.put(key, audio, "audio/mpeg")
+        voice.assets = {**(voice.assets or {}), "preview_key": key}
+        await session.commit()
+
+    return {"preview_url": await storage.presign_get(key)}
 
 
 class VoiceSelect(BaseModel):

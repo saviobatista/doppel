@@ -310,21 +310,41 @@ export function ArtifactPanel({
               <div className="mb-4 grid grid-cols-2 gap-2">
                 {plan.resources.design_elements.map((d) => {
                   const Icon = overlayIcon(d.kind);
-                  return d.preview_url ? (
+                  const preview = d.clip_url || d.preview_url;
+                  return preview ? (
                     <a
                       key={d.id}
-                      href={d.preview_url}
+                      href={d.clip_url || d.preview_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="group overflow-hidden rounded-xl border border-white/10 bg-black/40 transition-colors hover:border-accent/40"
+                      className="group overflow-hidden rounded-xl border border-white/10 bg-black transition-colors hover:border-accent/40"
                     >
-                      <div className="flex items-center justify-center p-2.5">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={d.preview_url}
-                          alt={d.label}
-                          className="max-h-20 w-full object-contain"
-                        />
+                      {/* Animated preview on a black 9:16 frame — exactly how the
+                          element sits/animates in the final video. */}
+                      <div className="relative aspect-[9/16] w-full bg-black">
+                        {d.clip_url ? (
+                          <video
+                            src={d.clip_url}
+                            poster={d.preview_url}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="absolute inset-0 h-full w-full object-contain"
+                          />
+                        ) : (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={d.preview_url}
+                            alt={d.label}
+                            className="absolute inset-0 h-full w-full object-contain"
+                          />
+                        )}
+                        {d.placement && (
+                          <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-zinc-300">
+                            {d.placement}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 border-t border-white/5 px-2.5 py-1.5">
                         <Icon className="h-3 w-3 shrink-0 text-accent" />

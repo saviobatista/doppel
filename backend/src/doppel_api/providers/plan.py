@@ -26,6 +26,35 @@ SCHEMA = {
         "title": {"type": "string", "description": "Punchy video title."},
         "logline": {"type": "string", "description": "One-sentence summary."},
         "style": {"type": "string", "description": "Visual + editorial style direction."},
+        "overlay_style": {
+            "type": "object",
+            "description": (
+                "The video's graphics theme — DERIVE it from the requested style so "
+                "overlays match the look (e.g. vibrant green/yellow bold-sports vs moody "
+                "neon). This drives palette, typography and treatment for EVERY overlay."
+            ),
+            "properties": {
+                "accent": {"type": "string", "description": "Primary accent hex (e.g. '#22c55e')."},
+                "primary": {"type": "string", "description": "Secondary brand hex."},
+                "secondary": {"type": "string", "description": "Tertiary/highlight hex."},
+                "bg": {"type": "string", "description": "Panel background hex (darker)."},
+                "bg2": {"type": "string", "description": "Panel background top hex (gradient)."},
+                "text": {"type": "string", "description": "Foreground text hex (near-white)."},
+                "muted": {"type": "string", "description": "Muted label hex."},
+                "treatment": {
+                    "type": "string",
+                    "enum": ["gradient", "glass", "solid", "neon", "outline"],
+                    "description": "Surface style for panels.",
+                },
+                "corner": {"type": "string", "enum": ["sharp", "rounded", "pill"]},
+                "font": {
+                    "type": "string",
+                    "enum": ["heavy", "condensed", "bold", "clean", "minimal"],
+                    "description": "Typography weight/feel; 'heavy'/'condensed' for sports energy.",
+                },
+            },
+            "required": ["accent", "bg", "text", "treatment", "font"],
+        },
         "footage_query": {
             "type": "string",
             "description": (
@@ -177,6 +206,24 @@ SCHEMA = {
                             "id": {"type": "string"},
                             "label": {"type": "string", "description": "Human name for the list."},
                             "kind": {"type": "string", "enum": _OVERLAYS},
+                            "placement": {
+                                "type": "string",
+                                "enum": ["top", "upper", "center", "lower", "bottom"],
+                                "description": (
+                                    "Where the overlay sits on the 9:16 frame. Vary it per "
+                                    "overlay so they don't all stack in one spot; keep clear "
+                                    "of the avatar's face and the caption band."
+                                ),
+                            },
+                            "animation": {
+                                "type": "string",
+                                "enum": ["slide_up", "slide_down", "fade", "pop"],
+                                "description": "Entrance motion; pick one that fits the energy.",
+                            },
+                            "accent": {
+                                "type": "string",
+                                "description": "Optional per-overlay accent hex override.",
+                            },
                             "content": {
                                 "type": "object",
                                 "description": (
@@ -271,7 +318,15 @@ def _system(*, duration: int, orientation: str, language: str,
         "`content` with the REAL, specific data from the research (actual team names, scores, "
         "player names, stat numbers, dates) — never placeholders. A scoreboard must carry the "
         "real teams + score; a stat_card the real metric + value; a lower_third the real "
-        "name + role. In resources.media, list each b-roll asset (label, kind, prompt for "
+        "name + role. Give each overlay a `placement` (vary them across top/upper/center/"
+        "lower/bottom so they don't all stack) and an `animation` that fits the energy. "
+        "Set overlay_style to a cohesive graphics THEME derived from the requested look — "
+        "real hex colors for accent/bg/text, a treatment (gradient/glass/solid/neon/outline) "
+        "and font feel (heavy/condensed for sports energy); this makes every video's "
+        "overlays visually distinct, not a generic template. If a BRAND IDENTITY block is "
+        "provided, it OVERRIDES generic styling: build overlay_style.accent/primary from the "
+        "brand's colors, choose bg/text that complement them, and keep the style on-brand. "
+        "In resources.media, list each b-roll asset (label, kind, prompt for "
         "generation, AND a concrete search_query of real-world terms to find it online, "
         "scene_id). Set meta.media_strategy: 'scrape' for a real documented event (a real "
         "match/news with media online), else 'generate'. Set footage_query to specific real-"
@@ -357,9 +412,21 @@ def _call(prompt: str, research: dict, *, duration: int, orientation: str,
           on_partial=None) -> dict:
     settings = get_settings()
     sources = research.get("sources") or []
+    brand = research.get("brand") or {}
+    brand_block = ""
+    if brand:
+        from doppel_api.providers.brand import brief_text
+        brand_block = (
+            "\n\nBRAND IDENTITY — use as the VISUAL BASELINE (the creator referenced "
+            "this brand/site):\n" + brief_text(brand) + "\n"
+            "Anchor overlay_style on this brand: set accent/primary from the brand colors, "
+            "pick bg/bg2/text that pair with them, and keep the energy and transitions "
+            "on-brand. Weave the brand's real facts (from the site) into the narration."
+        )
     research_block = (
         f"USER REQUEST:\n{prompt}\n\n"
-        f"WEB RESEARCH (synthesize, do not copy verbatim):\n{research.get('text', '')}\n\n"
+        f"WEB RESEARCH (synthesize, do not copy verbatim):\n{research.get('text', '')}"
+        f"{brand_block}\n\n"
         f"SOURCES (echo the relevant ones into research.sources):\n{json.dumps(sources)}"
     )
     kwargs = dict(

@@ -18,6 +18,7 @@ import anthropic
 import httpx
 
 from doppel_api.config import get_settings
+from doppel_api.providers import brand as brand_provider
 
 _MAX_SOURCES = 12
 _MCP_BETA = "mcp-client-2025-11-20"
@@ -176,8 +177,25 @@ def _anthropic_only(prompt: str, language: str) -> dict:
     return {"text": text.strip(), "sources": []}
 
 
+async def _augment_with_brand(prompt: str, result: dict) -> None:
+    """If the prompt references a website, fetch it and attach a structured `brand`
+    (name, colors, fonts) + a source, so the planner can anchor the visual style on
+    the real brand. First URL only; best-effort."""
+    urls = _URL_RE.findall(prompt)
+    if not urls:
+        return
+    b = await brand_provider.extract_brand(urls[0].rstrip(".,);"))
+    if not b:
+        return
+    result["brand"] = b
+    sources = result.setdefault("sources", [])
+    if b["url"] not in {s.get("url") for s in sources}:
+        sources.insert(0, {"title": b.get("title") or b["url"], "url": b["url"]})
+    print(f"brand extracted: {b.get('title')!r} colors={b.get('colors')}")
+
+
 async def research(prompt: str, *, language: str = "pt-BR") -> dict:
-    """Return {"text": briefing, "sources": [{title, url}]}. Never raises."""
+    """Return {"text": briefing, "sources": [...], "brand"?: {...}}. Never raises."""
     settings = get_settings()
     has_key = bool(settings.serpapi_key)
     # Ordered fallback chain starting at the configured primary.
@@ -190,11 +208,14 @@ async def research(prompt: str, *, language: str = "pt-BR") -> dict:
     else:
         chain = [("anthropic", _anthropic_only)]
 
+    result = {"text": "", "sources": []}
     for name, fn in chain:
         try:
             out = await anyio.to_thread.run_sync(lambda f=fn: f(prompt, language))
             if out.get("text") or out.get("sources"):
-                return out
+                result = out
+                break
         except Exception as exc:
             print(f"research[{name}] failed: {exc!r}")
-    return {"text": "", "sources": []}
+    await _augment_with_brand(prompt, result)
+    return result

@@ -102,44 +102,57 @@ def look_scenes_for_environment(environment: str) -> list[dict]:
     one cinematic. Fed into the identity-lock prompt, then a first-frame image edit.
     """
     env = (environment or "a clean, softly lit modern interior").strip().rstrip(".")
+    # Both looks: subject centered and facing/looking straight into the camera with a
+    # clean, balanced head-and-shoulders framing (eyes near the upper third).
+    framing = (
+        "Centered composition, subject facing forward and looking directly into the "
+        "camera lens, head level and straight, balanced head-and-shoulders vertical 9:16 "
+        "framing with the full head in frame (not cropped) and space for captions"
+    )
     return [
         {
             "label": "Ambiente",
             "scene_block": (
                 f"Half-body vertical 9:16 portrait of the same person in {env}. "
-                "Bright, clean key lighting with soft shadows, looking at the camera, "
-                "shallow depth of field, polished short-form video framing with space "
-                "for captions, photorealistic."
+                f"{framing}. Bright, clean key lighting with soft shadows, shallow depth "
+                "of field, polished short-form video look, photorealistic."
             ),
         },
         {
             "label": "Cinematográfico",
             "scene_block": (
                 f"Half-body vertical 9:16 portrait of the same person in {env}. "
-                "Cinematic moody lighting with a subtle colored accent and soft backlight, "
-                "slight three-quarter angle, bold and eye-catching short-form video look, "
-                "shallow depth of field, photorealistic."
+                f"{framing}. Cinematic moody lighting with a subtle colored accent and "
+                "soft backlight, bold and eye-catching short-form video look, shallow "
+                "depth of field, photorealistic."
             ),
         },
     ]
 
 
 # Default scene blocks for the 3 look options shown right after avatar creation.
+# Each look keeps the subject centered and looking straight into the camera with a
+# balanced head-and-shoulders 9:16 frame (the full head visible, space for captions).
+_LOOK_FRAMING = (
+    "Centered composition, subject facing forward and looking directly into the camera, "
+    "head level and straight, balanced half-body vertical 9:16 framing with the full head "
+    "in frame and space for captions"
+)
 LOOK_SCENES: list[dict] = [
     {
         "label": "Estúdio",
         "scene_block": (
             "Professional studio portrait on a smooth neutral charcoal backdrop, soft key "
-            "light with a gentle rim light, shallow depth of field, half-body vertical 9:16 "
-            "framing with space for captions, premium modern look, photorealistic."
+            "light with a gentle rim light, shallow depth of field, premium modern look, "
+            f"photorealistic. {_LOOK_FRAMING}."
         ),
     },
     {
         "label": "Escritório",
         "scene_block": (
             "Seated in a modern executive office with a softly blurred glass-wall city view, "
-            "warm premium lighting, confident and approachable, half-body vertical 9:16 framing "
-            "with space for captions, photorealistic."
+            "warm premium lighting, confident and approachable, photorealistic. "
+            f"{_LOOK_FRAMING}."
         ),
     },
     {
@@ -147,7 +160,7 @@ LOOK_SCENES: list[dict] = [
         "scene_block": (
             "Cinematic lifestyle scene in a stylish dark studio with subtle blue LED accent "
             "lighting and strong backlight, shallow depth of field, bold and eye-catching, "
-            "half-body vertical 9:16 framing with space for captions, photorealistic."
+            f"photorealistic. {_LOOK_FRAMING}."
         ),
     },
 ]

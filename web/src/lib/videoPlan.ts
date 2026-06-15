@@ -98,8 +98,14 @@ export interface DesignElement {
   id: string;
   label: string;
   kind: string;
-  /** Presigned URL of the rendered overlay PNG (set after materialization). */
+  /** Where it sits on the frame: top | upper | center | lower | bottom. */
+  placement?: string;
+  /** Entrance motion: slide_up | slide_down | fade | pop. */
+  animation?: string;
+  /** Presigned URL of the rendered overlay still PNG (poster / fallback). */
   preview_url?: string;
+  /** Presigned URL of the animated preview clip on a black 9:16 frame. */
+  clip_url?: string;
 }
 
 export interface ResourceRef {
@@ -150,6 +156,9 @@ export interface PlanBrief {
   voice_id?: string | null;
   avatar_label?: string | null;
   voice_label?: string | null;
+  /** Index into the avatar's looks; replaces the first frame when set. */
+  look_index?: number | null;
+  look_label?: string | null;
   duration_seconds?: number;
   orientation?: string;
   language?: string;

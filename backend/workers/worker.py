@@ -62,6 +62,27 @@ async def _seedream_bytes(face_url: str, prompt: str) -> bytes:
     return await media.fetch(await video.edit_image(face_url, prompt))
 
 
+async def _best_face_frame(src_path: str, tmp: Path) -> str:
+    """Pick the avatar's first frame: sample candidate frames across the recording
+    and let Claude Vision choose the most front-facing, centered, in-focus one
+    (subject looking straight at the camera). Degrades to the plain t=1s frame."""
+    settings = get_settings()
+    out = str(tmp / "face.png")
+    cands = await _safe(
+        "candidate frames", media.extract_candidate_frames(src_path, str(tmp / "cand"), count=8))
+    if cands and len(cands) > 1 and settings.anthropic_api_key:
+        frames = [Path(p).read_bytes() for p in cands]  # noqa: ASYNC240
+        idx = await _safe("pick best frame", script.pick_best_frame(frames))
+        if isinstance(idx, int) and 0 <= idx < len(cands):
+            print(f"avatar first frame: picked candidate #{idx}/{len(cands)}")
+            if await _safe("transcode frame", media.transcode_image(cands[idx], out)):
+                return out
+    if cands and await _safe("transcode frame", media.transcode_image(cands[0], out)):
+        return out
+    # Ultimate fallback: the original single-frame extractor.
+    return await media.extract_frame(src_path, out)
+
+
 async def _generate_looks(
     ctx: "WorkerContext", avatar_id: str, face_bytes: bytes
 ) -> tuple[dict | None, str | None, list[dict]]:
@@ -225,7 +246,7 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
 
         src = tmp / "source"
         src.write_bytes(source_bytes)
-        face_path = await media.extract_frame(str(src), str(tmp / "face.png"))
+        face_path = await _best_face_frame(str(src), tmp)
         ref_path = await media.extract_audio(str(src), str(tmp / "ref.wav"))
         face_bytes = Path(face_path).read_bytes()  # noqa: ASYNC240
         ref_bytes = Path(ref_path).read_bytes()  # noqa: ASYNC240
@@ -430,6 +451,27 @@ _OVERLAY_KINDS = {
 }
 
 
+def _resolve_anchor(anchor: str, scene_kind: str | None, has_cues: bool) -> str:
+    """Keep overlays off the avatar's face and the caption band: an avatar scene
+    never centers an overlay (covers the face), and captioned scenes don't drop
+    one into the bottom band (collides with the subtitles)."""
+    a = anchor or "lower"
+    if scene_kind == "avatar" and a == "center":
+        a = "upper"
+    if has_cues and a == "bottom":
+        a = "lower"
+    return a
+
+
+async def _overlay_clip_bytes(png: bytes, anchor: str, anim: str) -> bytes:
+    """Render the overlay PNG to an animated black-background preview MP4."""
+    with tempfile.TemporaryDirectory() as td:
+        pin, pout = Path(td) / "ov.png", Path(td) / "ov.mp4"
+        pin.write_bytes(png)
+        await compose.render_overlay_preview(str(pin), str(pout), anchor=anchor, anim=anim)
+        return pout.read_bytes()
+
+
 def _backfill_resources(artifact: dict) -> None:
     """Guarantee the Resources panel is populated: derive design_elements from the
     overlay ids referenced in scenes and media from broll scene prompts whenever
@@ -542,16 +584,29 @@ async def _materialize_resources(ctx: "WorkerContext", plan_id: str, artifact: d
                 f"plan-{plan_id}/media-{i}", "jpg")
             item["key"], item["source"] = f"plans/{plan_id}/media/{i}.jpg", source
 
+    theme = artifact.get("overlay_style") or None
+
     async def _do_overlay(el: dict) -> None:
         el_id = el.get("id") or "el"
         png = await _safe(f"overlay {el_id}", anyio.to_thread.run_sync(
             lambda: overlays.render(
-                el.get("kind", "title_card"), el.get("label", ""), el.get("content") or {})))
-        if png:
-            key = f"plans/{plan_id}/overlays/{el_id}.png"
-            el["preview_url"] = await _store(
-                ctx, key, png, "image/png", f"plan-{plan_id}/overlay-{el_id}", "png")
-            el["key"] = key
+                el.get("kind", "title_card"), el.get("label", ""), el.get("content") or {},
+                theme=theme, accent=el.get("accent"))))
+        if not png:
+            return
+        key = f"plans/{plan_id}/overlays/{el_id}.png"
+        # Still PNG: composited into scenes (el["key"]) and used as the clip poster.
+        el["preview_url"] = await _store(
+            ctx, key, png, "image/png", f"plan-{plan_id}/overlay-{el_id}", "png")
+        el["key"] = key
+        # Animated preview on a black 9:16 frame — exactly how it will animate/sit
+        # in the final video — so the plan panel previews the real element.
+        clip = await _safe(f"overlay clip {el_id}", _overlay_clip_bytes(
+            png, el.get("placement") or "lower", el.get("animation") or "fade"))
+        if clip:
+            ckey = f"plans/{plan_id}/overlays/{el_id}.mp4"
+            el["clip_url"] = await _store(
+                ctx, ckey, clip, "video/mp4", f"plan-{plan_id}/overlay-{el_id}", "mp4")
 
     await asyncio.gather(
         *[_do_media(i, it) for i, it in enumerate(resources.get("media") or [])],
@@ -871,16 +926,21 @@ async def _build_scene(
             dur = await compose.probe_duration(audio_path) or dur
 
         overlay_png = None
+        ov_anchor, ov_anim = "lower", "fade"
         for ov_id in scene.get("overlays") or []:
             el = overlays_by_id.get(ov_id)
             if el and el.get("key"):
                 overlay_png = await _safe(
                     f"overlay {ov_id}", _key_to_tmp(ctx, tmp, el["key"], f"ov_{sid}.png"))
+                ov_anchor = _resolve_anchor(
+                    el.get("placement") or "lower", scene.get("kind"), bool(cues))
+                ov_anim = el.get("animation") or "fade"
                 break
 
         spec = compose.SceneSpec(
             out_path=str(tmp / f"scene_{idx:02d}.mp4"), duration=dur, audio_path=audio_path,
-            overlay_png=overlay_png, cues=cues, kb_index=idx, font=settings.caption_font,
+            overlay_png=overlay_png, overlay_anchor=ov_anchor, overlay_anim=ov_anim,
+            cues=cues, kb_index=idx, font=settings.caption_font,
         )
         if scene.get("kind") == "avatar" and cfg.lipsync == "fabric" and audio_path:
             audio_bytes = Path(audio_path).read_bytes()  # noqa: ASYNC240
@@ -991,6 +1051,23 @@ async def handle_plan_generate(ctx: "WorkerContext", payload: dict) -> None:
         avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
         voice_id = avatar.assets["voice_id"]
         face_key = avatar.assets["face_image"]
+        # A picker voice (a reusable Voice object) overrides the avatar's own voice.
+        brief_voice = (p.brief or {}).get("voice_id")
+        if brief_voice and brief_voice != voice_id:
+            v = (await s.execute(
+                select(Voice).where(Voice.id == brief_voice, Voice.device_id == avatar.device_id)
+            )).scalar_one_or_none()
+            if v and v.status == "ready" and v.external_id:
+                voice_id = v.external_id
+                print(f"plan {plan_id}: using selected voice {v.id} ({v.label})")
+        # A picked look swaps the first frame: the avatar is rendered wearing that
+        # look instead of the raw recording frame.
+        look_index = (p.brief or {}).get("look_index")
+        if look_index is not None:
+            looks = avatar.assets.get("looks") or []
+            if 0 <= look_index < len(looks) and looks[look_index].get("key"):
+                face_key = looks[look_index]["key"]
+                print(f"plan {plan_id}: using look #{look_index} ({face_key}) as first frame")
 
     try:
         await _render_plan(ctx, plan_id, video_id, artifact, voice_id, face_key, selections, cfg)
