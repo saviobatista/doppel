@@ -10,8 +10,6 @@ empty/None on failure so the worker can fall back to generation.
 import asyncio
 import base64
 import io
-import os
-import tempfile
 
 import anthropic
 import anyio
@@ -233,47 +231,10 @@ async def choose_image(
     return None
 
 
-def _ydl_fetch(query: str, n: int, outdir: str, *, audio: bool, max_seconds: int) -> list[dict]:
-    """Blocking yt-dlp search+download (run in a thread)."""
-    import yt_dlp
-    from yt_dlp.utils import match_filter_func
-
-    opts: dict = {
-        "quiet": True, "no_warnings": True, "ignoreerrors": True,
-        "default_search": "ytsearch", "playlistend": n,
-        "outtmpl": os.path.join(outdir, "%(id)s.%(ext)s"),
-        "socket_timeout": 30, "retries": 1, "noprogress": True,
-        "match_filter": match_filter_func(f"duration < {max_seconds}"),
-    }
-    if audio:
-        opts["format"] = "bestaudio/best"
-        opts["postprocessors"] = [
-            {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "128"}
-        ]
-    else:
-        opts["format"] = "mp4[height<=720]/best[height<=720]/best"
-
-    results: list[dict] = []
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch{n}:{query}", download=True)
-        for e in (info or {}).get("entries") or []:
-            if not e:
-                continue
-            path = ydl.prepare_filename(e)
-            if audio:
-                path = os.path.splitext(path)[0] + ".mp3"
-            if os.path.exists(path):
-                results.append({
-                    "path": path, "title": e.get("title") or query,
-                    "duration": e.get("duration"), "url": e.get("webpage_url"),
-                })
-    return results
-
-
 async def search_youtube(query: str, n: int = 4, *, language: str = "pt-BR") -> list[dict]:
     """Real, ranked, recent YouTube results via SerpAPI — LINKS + metadata only, no
     download. Returns [{title, link, video_id, thumbnail, channel, published, views,
-    length}]. Downloading is deferred (see download_youtube)."""
+    length}]."""
     key = get_settings().serpapi_key
     if not key or not query:
         return []
@@ -325,40 +286,3 @@ async def fetch_thumbnail(url: str | None) -> bytes | None:
         except Exception:
             return None
     return None
-
-
-async def download_youtube(url: str, max_seconds: int = 100) -> dict | None:
-    """Deferred: download a single YouTube video to disk (used at generation time,
-    not during plan build). Best-effort -> None."""
-    if not url:
-        return None
-    outdir = tempfile.mkdtemp(prefix="ytvid_")
-    try:
-        items = await asyncio.wait_for(
-            anyio.to_thread.run_sync(
-                lambda: _ydl_fetch(url, 1, outdir, audio=False, max_seconds=max_seconds)
-            ),
-            timeout=90,
-        )
-        return items[0] if items else None
-    except Exception as exc:
-        print(f"youtube download failed for {url!r}: {exc!r}")
-        return None
-
-
-async def youtube_audio(query: str, max_seconds: int = 200) -> dict | None:
-    """Download one audio track for the query (e.g. royalty-free music). Best-effort."""
-    if not query:
-        return None
-    outdir = tempfile.mkdtemp(prefix="ytaudio_")
-    try:
-        items = await asyncio.wait_for(
-            anyio.to_thread.run_sync(
-                lambda: _ydl_fetch(query, 1, outdir, audio=True, max_seconds=max_seconds)
-            ),
-            timeout=45,  # fail fast: yt-dlp is blocked from datacenter IPs
-        )
-        return items[0] if items else None
-    except Exception as exc:
-        print(f"youtube audio fetch failed for {query!r}: {exc!r}")
-        return None

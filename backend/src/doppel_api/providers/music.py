@@ -1,19 +1,16 @@
-"""Background-music generation/sourcing — three candidates to A/B compare.
+"""Background-music generation — two candidates to A/B compare.
 
-  1. fal_music       — fal Stable Audio 3 (instrumental, licensed) text->music
+  1. fal_music        — fal Stable Audio 3 (instrumental, licensed) text->music
   2. elevenlabs_music — ElevenLabs Music API (POST /v1/music)
-  3. scraped_music    — royalty-free track pulled from YouTube via yt-dlp
 
 All best-effort: each raises on failure and the worker just drops that candidate.
 """
 import asyncio
-from pathlib import Path
 
 import fal_client
 import httpx
 
 from doppel_api.config import get_settings
-from doppel_api.providers import sourcing
 
 MUSIC_TIMEOUT = 240.0
 
@@ -48,12 +45,3 @@ async def elevenlabs_music(prompt: str, ms: int = 30000) -> bytes:
         )
         r.raise_for_status()
         return r.content
-
-
-async def scraped_music(query: str) -> tuple[bytes, dict] | None:
-    """Royalty-free track via yt-dlp. Returns (mp3_bytes, meta) or None."""
-    item = await sourcing.youtube_audio(query)
-    if not item:
-        return None
-    data = Path(item["path"]).read_bytes()  # noqa: ASYNC240
-    return data, {"title": item.get("title"), "url": item.get("url")}

@@ -680,20 +680,15 @@ async def _fetch_music(ctx, plan_id: str, artifact: dict) -> list[dict]:
         f"{mood} instrumental background music, {int(m.get('bpm') or 120)} BPM, "
         "for a short social video"
     )
-    fal_b, el_b, scraped = await asyncio.gather(
+    fal_b, el_b = await asyncio.gather(
         _safe("fal music", music.fal_music(prompt)),
         _safe("elevenlabs music", music.elevenlabs_music(prompt)),
-        _safe("scraped music", music.scraped_music(f"no copyright {mood} background music")),
     )
     out: list[dict] = []
     blobs = [
         ("fal", "fal Stable Audio", fal_b, None),
         ("elevenlabs", "ElevenLabs Music", el_b, None),
     ]
-    if scraped:
-        data, meta_ = scraped
-        blobs.append(("scraped", meta_.get("title") or "Royalty-free (YouTube)", data,
-                      meta_.get("url")))
     for source, label, data, link in blobs:
         if not data:
             continue
