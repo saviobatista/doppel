@@ -1,0 +1,27 @@
+# Argo Application do Kortes (dev). Aplicada no cluster mda-development.
+# O chart vive neste repo (deploy/helm); o Argo observa a branch e auto-sincroniza.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kortes-dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:saviobatista/doppel.git
+    targetRevision: feature/v2beta
+    path: deploy/helm
+    helm:
+      valueFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kortes-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
