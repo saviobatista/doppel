@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from doppel_api.config import get_settings
-from doppel_api.db import init_db, make_engine, make_session_factory
+from doppel_api.db import make_engine, make_session_factory
 from doppel_api.routes import avatars, plans, sessions, videos, voices
 from doppel_api.storage import S3Storage, Storage
 
@@ -29,7 +29,6 @@ def create_app(
             app.state.session_factory = make_session_factory(engine)
             app.state.storage = S3Storage(settings)
             app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=True)
-            await init_db(engine)
             await app.state.storage.ensure_bucket()
         yield
         if engine is not None:

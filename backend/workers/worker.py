@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from doppel_api import cache
 from doppel_api.config import get_settings
 from doppel_api.constants import FEEDBACK_LINE, HELLO_LINE
-from doppel_api.db import init_db, make_engine, make_session_factory
+from doppel_api.db import make_engine, make_session_factory
 from doppel_api.events import publish
 from doppel_api.models import Avatar, Job, Plan, Video, Voice
 from doppel_api.providers import compose, flux2, identity, media, music, overlays
@@ -1161,7 +1161,6 @@ async def process_one(ctx: WorkerContext) -> bool:
 async def main() -> None:
     settings = get_settings()
     engine = make_engine()
-    await init_db(engine)
     storage = S3Storage(settings)
     await storage.ensure_bucket()
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)
