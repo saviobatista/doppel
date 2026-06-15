@@ -1,0 +1,11 @@
+# Terragrunt / Terraform - artefatos gerados (nunca versionar)
+.terragrunt-cache/
+.terraform/
+.terraform.lock.hcl
+# Gerados pelo terragrunt (remote_state / generate)
+backend.tf
+provider.tf
+# State e planos locais
+*.tfstate
+*.tfstate.*
+*.tfplan
