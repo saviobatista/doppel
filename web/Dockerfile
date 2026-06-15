@@ -21,6 +21,9 @@ CMD ["npm", "run", "dev", "--", "--port", "3000", "--hostname", "0.0.0.0"]
 FROM node:22-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* e embutido no build: default localhost p/ dev, override p/ prod.
+ARG NEXT_PUBLIC_API_URL=http://localhost:8200
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
