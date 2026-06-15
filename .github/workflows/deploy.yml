@@ -1,0 +1,64 @@
+name: build-and-push
+
+# Builda e publica as imagens no ECR (amd64) e faz o bump da tag no values-dev.
+# O deploy em si (helm/Argo) e tratado a parte - ver deploy/helm.
+on:
+  push:
+    branches: [main, feature/v2beta]
+    paths:
+      - "backend/**"
+      - "web/**"
+      - "deploy/helm/**"
+      - ".github/workflows/deploy.yml"
+
+permissions:
+  id-token: write      # OIDC para assumir a role na AWS
+  contents: write      # para commitar o bump da tag
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 523083723230.dkr.ecr.us-east-1.amazonaws.com
+  ROLE_ARN: arn:aws:iam::523083723230:role/kortes-ci-dev
+  API_URL: https://api.kortes.ai
+
+jobs:
+  build:
+    runs-on: ubuntu-latest      # runner amd64 = mesma arquitetura dos nodes EKS
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # TAG = short SHA do commit (hex, controlado). Exportado via env para os
+      # steps seguintes em vez de interpolar ${{ }} direto no shell.
+      - name: Define a tag
+        run: echo "TAG=$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build & push kortes-api
+        run: |
+          docker build --platform linux/amd64 \
+            -t "$ECR_REGISTRY/kortes-api:$TAG" backend
+          docker push "$ECR_REGISTRY/kortes-api:$TAG"
+
+      - name: Build & push kortes-web
+        run: |
+          docker build --platform linux/amd64 --target runner \
+            --build-arg NEXT_PUBLIC_API_URL="$API_URL" \
+            -t "$ECR_REGISTRY/kortes-web:$TAG" web
+          docker push "$ECR_REGISTRY/kortes-web:$TAG"
+
+      - name: Bump image tag em values-dev.yaml
+        run: |
+          sed -i "s/^  tag: .*/  tag: \"$TAG\"/" deploy/helm/values-dev.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deploy/helm/values-dev.yaml
+          git commit -m "chore(deploy): bump image tag -> $TAG [skip ci]" \
+            && git push || echo "sem mudanca de tag"
