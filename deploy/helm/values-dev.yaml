@@ -1,6 +1,6 @@
 # Overrides do ambiente dev (cluster mda-development).
 image:
-  tag: "1c396ff"
+  tag: "3ef6972"
 
 serviceAccount:
   roleArn: arn:aws:iam::523083723230:role/kortes-app-dev
