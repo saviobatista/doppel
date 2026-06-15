@@ -5,6 +5,7 @@
 # Gerados pelo terragrunt (remote_state / generate)
 backend.tf
 provider.tf
+provider_shared.tf
 # State e planos locais
 *.tfstate
 *.tfstate.*
