@@ -21,6 +21,13 @@ media/
 # Provider artifact cache (generated media, never commit)
 cache/
 
+# Local test/scratch outputs (avatar-flow sample runs, scratch images at repo root)
+flow-test/
+/*.png
+/*.webp
+/*.jpg
+/*.jpeg
+
 # Browser automation artifacts
 .playwright-mcp/
 
