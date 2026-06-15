@@ -17,7 +17,10 @@ from doppel_api.queue import enqueue
 
 router = APIRouter()
 
-MAX_SAMPLE_BYTES = 32 * 1024 * 1024
+MAX_SAMPLE_BYTES = 128 * 1024 * 1024
+
+# Preserve the uploaded container so ElevenLabs decodes it correctly.
+AUDIO_EXTS = {"wav", "mp3", "m4a", "aac", "ogg", "oga", "opus", "flac", "webm", "mp4", "wma"}
 
 
 async def _candidate_views(voice: Voice, storage) -> list[dict]:
@@ -98,7 +101,11 @@ async def create_voice(
         data = await sample.read(MAX_SAMPLE_BYTES + 1)
         if len(data) > MAX_SAMPLE_BYTES:
             raise HTTPException(status_code=413, detail="sample too large")
-        ext = "wav" if (sample.content_type or "").endswith("wav") else "webm"
+        fname = sample.filename or ""
+        ext = fname.rsplit(".", 1)[-1].lower() if "." in fname else ""
+        if ext not in AUDIO_EXTS:
+            ctype = sample.content_type or ""
+            ext = "wav" if ctype.endswith("wav") else "webm"
         sample_key = f"voices/{voice.id}/sample.{ext}"
         await storage.put(sample_key, data, sample.content_type or "audio/webm")
     elif source == "footage" and avatar is not None:

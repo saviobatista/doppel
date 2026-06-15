@@ -162,6 +162,16 @@ async def extract_audio(src_path: str, out_path: str) -> str:
     return out_path
 
 
+async def compress_for_clone(src_path: str, out_path: str, max_seconds: float = 300.0) -> str:
+    """Mono MP3, length-capped, for voice-clone upload. Providers cap the sample
+    file size (ElevenLabs IVC rejects > 11MB); 128kbps mono ≈ 1MB/min, so a 5-min
+    cap stays well under the limit while preserving plenty of timbre for cloning."""
+    args = ["-fflags", "+bitexact", "-i", src_path, "-vn", "-ac", "1", "-ar", "44100",
+            "-t", f"{max_seconds}", "-b:a", "128k", "-map_metadata", "-1", out_path]
+    await anyio.to_thread.run_sync(lambda: _run_ffmpeg(args))
+    return out_path
+
+
 async def silent_wav(out_path: str, seconds: float = 4.0) -> str:
     """A short silent mono track — fed to the talking-avatar model it yields an
     idle clip (mouth closed, natural blinks) to loop while waiting for input."""

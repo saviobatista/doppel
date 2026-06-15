@@ -21,6 +21,7 @@ export interface PrimaryNavItem {
 /** Top icons of the narrow primary rail. */
 export const PRIMARY_NAV: PrimaryNavItem[] = [
   { href: "/", label: "Início", icon: Home },
+  { href: "/agente", label: "AI Studio", icon: Sparkles },
   { href: "/avatar", label: "Avatar", icon: UserRound },
   { href: "/marca", label: "Marca", icon: Palette },
   { href: "/apps", label: "Apps", icon: LayoutGrid },
@@ -57,12 +58,6 @@ export const AVATAR_PANE: SecondaryNavGroup[] = [
     items: [
       { href: "/avatar", label: "Avatares", icon: Users, match: ["/avatar/clonar"] },
       { href: "/avatar/vozes", label: "Vozes", icon: AudioLines },
-    ],
-  },
-  {
-    label: "Criar vídeo",
-    items: [
-      { href: "/criar", label: "AI Studio", icon: Sparkles, match: ["/criar"] },
     ],
   },
 ];

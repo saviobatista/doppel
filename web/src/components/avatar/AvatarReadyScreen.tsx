@@ -96,7 +96,9 @@ export function AvatarReadyScreen({ avatarId }: { avatarId: string }) {
               Preparando {name ? `o avatar de ${name}` : "seu avatar"}…
             </h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Estamos extraindo seu rosto e clonando sua voz a partir da gravação.
+              {detail?.kind === "photo"
+                ? "Estamos preparando seu rosto e gerando os visuais do avatar."
+                : "Estamos extraindo seu rosto e clonando sua voz a partir da gravação."}
             </p>
           </div>
         ) : (
@@ -108,14 +110,23 @@ export function AvatarReadyScreen({ avatarId }: { avatarId: string }) {
               </p>
             </div>
 
-            {helloUrl && (
+            {(helloUrl || idleUrl || detail?.preview_url) && (
               <div className="mx-auto mt-6 max-w-[280px] overflow-hidden rounded-2xl border border-white/10 bg-black">
-                <LiveAvatarVideo key={helloUrl} helloUrl={helloUrl} idleUrl={idleUrl} />
+                <LiveAvatarVideo
+                  key={helloUrl ?? idleUrl ?? detail?.preview_url ?? "media"}
+                  helloUrl={helloUrl}
+                  idleUrl={idleUrl}
+                  posterUrl={detail?.preview_url ?? null}
+                />
               </div>
             )}
 
             <div className="mt-8">
-              <VoiceSetup avatarId={avatarId} defaultLabel={name} footageReady />
+              <VoiceSetup
+                avatarId={avatarId}
+                defaultLabel={name}
+                footageReady={detail?.kind !== "photo"}
+              />
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ import {
   Camera,
   Mic,
   Upload,
+  ImagePlus,
   Languages,
   Loader2,
   CameraOff,
@@ -20,10 +21,10 @@ import { AudioMeter } from "@/components/ui/AudioMeter";
 import { RecordingTips } from "@/components/avatar/RecordingTips";
 import { AvatarRecorder } from "@/components/avatar/AvatarRecorder";
 import { RecordReview } from "@/components/avatar/RecordReview";
-import { createAvatar } from "@/lib/api";
+import { createAvatar, createAvatarPhoto } from "@/lib/api";
 import { cn } from "@/lib/cn";
 
-type Tab = "webcam" | "phone";
+type Tab = "webcam" | "phone" | "photo";
 type Aspect = "landscape" | "portrait";
 type Status = "loading" | "ready" | "denied" | "error";
 type Step = "config" | "tips" | "recording" | "review";
@@ -57,6 +58,13 @@ export function CloneAvatarSetup() {
   const [step, setStep] = useState<Step>("config");
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
   const recordedBlobRef = useRef<Blob | null>(null);
+
+  // Photo-upload flow (a still becomes the avatar's first frame).
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoName, setPhotoName] = useState("");
+  const [creatingPhoto, setCreatingPhoto] = useState(false);
+  const [photoErr, setPhotoErr] = useState<string | null>(null);
 
   // Mirror the latest selection so the async acquire helper never reads stale
   // values when invoked from effects/listeners.
@@ -245,6 +253,39 @@ export function CloneAvatarSetup() {
     router.push(`/avatar/${id}?new=1`);
   };
 
+  const onPhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhotoErr(null);
+    setPhotoFile(f);
+    setPhotoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
+    setPhotoName((n) => n || f.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const createFromPhoto = async () => {
+    if (!photoFile || creatingPhoto) return;
+    setCreatingPhoto(true);
+    setPhotoErr(null);
+    try {
+      const id = await createAvatarPhoto(photoFile, photoName.trim());
+      stopStream();
+      router.push(`/avatar/${id}?new=1`);
+    } catch (e) {
+      setPhotoErr((e as Error).message);
+      setCreatingPhoto(false);
+    }
+  };
+
+  // Release the photo preview URL on unmount.
+  useEffect(() => {
+    return () => {
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+    };
+  }, [photoUrl]);
+
   const ready = status === "ready";
   const isPortrait = aspect === "portrait";
 
@@ -276,12 +317,15 @@ export function CloneAvatarSetup() {
           </div>
 
           {/* Source tabs */}
-          <div className="mx-auto mt-6 grid max-w-md grid-cols-2 rounded-full border border-white/10 bg-white/5 p-1">
+          <div className="mx-auto mt-6 grid max-w-lg grid-cols-3 rounded-full border border-white/10 bg-white/5 p-1">
             <TabButton active={tab === "webcam"} onClick={() => setTab("webcam")} icon={Video}>
-              Gravar via webcam
+              Webcam
             </TabButton>
             <TabButton active={tab === "phone"} onClick={() => setTab("phone")} icon={Smartphone}>
-              Gravar via celular
+              Celular
+            </TabButton>
+            <TabButton active={tab === "photo"} onClick={() => setTab("photo")} icon={ImagePlus}>
+              Carregar foto
             </TabButton>
           </div>
 
@@ -290,11 +334,15 @@ export function CloneAvatarSetup() {
             <div
               className={cn(
                 "relative mx-auto overflow-hidden rounded-2xl border border-white/10 bg-black",
-                isPortrait ? "aspect-[9/16] max-w-[320px]" : "aspect-video w-full",
+                isPortrait || tab === "photo"
+                  ? "aspect-[9/16] max-w-[320px]"
+                  : "aspect-video w-full",
               )}
             >
               {tab === "phone" ? (
                 <PhonePanel />
+              ) : tab === "photo" ? (
+                <PhotoPanel url={photoUrl} onPick={onPhotoPick} />
               ) : (
                 <>
                   <video
@@ -366,18 +414,36 @@ export function CloneAvatarSetup() {
             )}
           </div>
 
-          {/* Script language */}
-          <div className="mt-6 flex items-center justify-center gap-2 text-sm text-zinc-400">
-            <Languages className="h-4 w-4 text-zinc-500" />
-            Vamos exibir um roteiro na tela em
-            <Dropdown
-              value={lang}
-              options={LANGS}
-              onChange={setLang}
-              side="top"
-              align="end"
-            />
-          </div>
+          {/* Photo name (photo tab) or script language (recording tabs) */}
+          {tab === "photo" ? (
+            <div className="mx-auto mt-6 max-w-md">
+              <label className="block text-center text-sm text-zinc-400">
+                Nome do avatar
+              </label>
+              <input
+                value={photoName}
+                onChange={(e) => setPhotoName(e.target.value)}
+                placeholder="Ex.: Maria CEO"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:border-accent/60 focus:outline-none focus:ring-1 focus:ring-accent/40"
+              />
+              <p className="mt-2 text-center text-xs text-zinc-500">
+                Você escolhe a voz na próxima etapa. Aceita JPG, PNG, WebP, HEIC e mais.
+              </p>
+              {photoErr && <p className="mt-3 text-center text-sm text-red-300">{photoErr}</p>}
+            </div>
+          ) : (
+            <div className="mt-6 flex items-center justify-center gap-2 text-sm text-zinc-400">
+              <Languages className="h-4 w-4 text-zinc-500" />
+              Vamos exibir um roteiro na tela em
+              <Dropdown
+                value={lang}
+                options={LANGS}
+                onChange={setLang}
+                side="top"
+                align="end"
+              />
+            </div>
+          )}
 
           {/* Footer actions */}
           <div className="mt-8 flex items-center justify-center gap-6">
@@ -387,19 +453,39 @@ export function CloneAvatarSetup() {
             >
               Voltar
             </button>
-            <button
-              disabled={tab === "webcam" && !ready}
-              onClick={() => setStep("tips")}
-              className={cn(
-                "flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-colors",
-                tab === "phone" || ready
-                  ? "bg-accent text-obsidian hover:bg-accent-strong"
-                  : "cursor-not-allowed bg-white/10 text-zinc-500",
-              )}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Estou pronto
-            </button>
+            {tab === "photo" ? (
+              <button
+                disabled={!photoFile || creatingPhoto}
+                onClick={createFromPhoto}
+                className={cn(
+                  "flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-colors",
+                  photoFile && !creatingPhoto
+                    ? "bg-accent text-obsidian hover:bg-accent-strong"
+                    : "cursor-not-allowed bg-white/10 text-zinc-500",
+                )}
+              >
+                {creatingPhoto ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                {creatingPhoto ? "Criando…" : "Criar avatar"}
+              </button>
+            ) : (
+              <button
+                disabled={tab === "webcam" && !ready}
+                onClick={() => setStep("tips")}
+                className={cn(
+                  "flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold transition-colors",
+                  tab === "phone" || ready
+                    ? "bg-accent text-obsidian hover:bg-accent-strong"
+                    : "cursor-not-allowed bg-white/10 text-zinc-500",
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Estou pronto
+              </button>
+            )}
           </div>
         </div>
       </main>
@@ -486,6 +572,40 @@ function Overlay({
         </button>
       )}
     </div>
+  );
+}
+
+function PhotoPanel({
+  url,
+  onPick,
+}: {
+  url: string | null;
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <label className="absolute inset-0 flex cursor-pointer flex-col items-center justify-center gap-3 px-6 text-center transition-colors hover:bg-white/5">
+      {url ? (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="Pré-visualização" className="absolute inset-0 h-full w-full object-cover" />
+          <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-medium text-white backdrop-blur">
+            Trocar foto
+          </span>
+        </>
+      ) : (
+        <>
+          <ImagePlus className="h-8 w-8 text-zinc-400" />
+          <p className="text-sm text-zinc-300">Clique para carregar uma foto</p>
+          <p className="text-xs text-zinc-500">JPG, PNG, WebP, HEIC, GIF…</p>
+        </>
+      )}
+      <input
+        type="file"
+        accept="image/*,.heic,.heif,.avif,.webp,.bmp,.tiff"
+        className="hidden"
+        onChange={onPick}
+      />
+    </label>
   );
 }
 

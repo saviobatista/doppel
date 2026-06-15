@@ -224,6 +224,55 @@ async def _ensure_avatar_card_looks(
         print(f"avatar card looks failed, continuing: {_fmt_exc(exc)}")
 
 
+async def _prep_photo_avatar(ctx: "WorkerContext", avatar_id: str, source_key: str) -> None:
+    """Build an avatar from a single still image: the photo is the first frame,
+    we synthesize an idle "live" loop from it, and generate card looks. No audio
+    means no footage voice — the user picks/clones a voice afterward."""
+    face_key = f"avatars/{avatar_id}/face.png"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        source_bytes = await ctx.storage.get(source_key)
+        src = tmp / "source"
+        src.write_bytes(source_bytes)
+        # Any format (jpg/png/webp/heic/…) → normalized PNG first frame.
+        face_path = await media.transcode_image(str(src), str(tmp / "face.png"))
+        face_bytes = Path(face_path).read_bytes()  # noqa: ASYNC240
+        await ctx.storage.put(face_key, face_bytes, "image/png")
+
+        # Idle "live" loop: silent audio → eye contact + natural blinks. Best-effort.
+        idle_key: str | None = None
+        try:
+            silent = await media.silent_wav(str(tmp / "silence.wav"), 5.0)
+            idle_path = await cache.blob(
+                "fabric", [face_bytes, "idle-5s-silent"], "mp4",
+                lambda fp=face_path, ap=silent: _fabric_bytes(fp, ap),
+            )
+            loop_path = await media.boomerang(idle_path, str(tmp / "idle_loop.mp4"))
+            idle_bytes = Path(loop_path).read_bytes()  # noqa: ASYNC240
+            idle_key = f"avatars/{avatar_id}/idle.mp4"
+            await ctx.storage.put(idle_key, idle_bytes, "video/mp4")
+        except Exception as exc:
+            print(f"photo idle clip failed, continuing: {_fmt_exc(exc)}")
+
+    async with ctx.session_factory() as s:
+        avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
+        avatar.status = "ready"
+        avatar.assets = {
+            **avatar.assets,
+            "face_image": face_key,
+            **({"idle": idle_key} if idle_key else {}),
+        }
+        await s.commit()
+
+    payload: dict = {}
+    if idle_key:
+        payload["idle_url"] = await ctx.storage.presign_get(idle_key)
+    await publish(ctx.redis, avatar_id, "hello_ready", payload)
+
+    # Generate the card looks afterward so "ready" isn't delayed. Best-effort.
+    await _ensure_avatar_card_looks(ctx, avatar_id, face_bytes)
+
+
 async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
     avatar_id = payload["avatar_id"]
     settings = get_settings()
@@ -232,6 +281,11 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
     async with ctx.session_factory() as s:
         avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
         source_key = avatar.assets["source"]
+        is_photo = avatar.assets.get("kind") == "photo"
+
+    if is_photo:
+        await _prep_photo_avatar(ctx, avatar_id, source_key)
+        return
 
     hello_key = f"avatars/{avatar_id}/hello.mp4"
     feedback_key = f"avatars/{avatar_id}/feedback.mp4"
@@ -256,9 +310,12 @@ async def handle_avatar_prep(ctx: "WorkerContext", payload: dict) -> None:
         await ctx.storage.put(audio_key, ref_bytes, "audio/wav")
         cache.put_blob("audio", [avatar_id], "wav", ref_bytes)
 
+        # Clone from a compressed, length-capped copy so long recordings stay
+        # under the ElevenLabs IVC 11MB upload limit.
+        clone_sample = await media.compress_for_clone(ref_path, str(tmp / "clone.mp3"))
         voice_id = await cache.value(
             "clone", [ref_bytes],
-            lambda: voice.clone(ref_path, name=f"doppel-{avatar_id[:8]}"),
+            lambda: voice.clone(clone_sample, name=f"doppel-{avatar_id[:8]}"),
         )
         model = settings.elevenlabs_model
         for line, key, name in (
@@ -1049,7 +1106,8 @@ async def handle_plan_generate(ctx: "WorkerContext", payload: dict) -> None:
         artifact = dict(p.plan or {})
         avatar_id = p.avatar_id
         avatar = (await s.execute(select(Avatar).where(Avatar.id == avatar_id))).scalar_one()
-        voice_id = avatar.assets["voice_id"]
+        # Photo avatars have no cloned voice — they rely on a picked Voice object.
+        voice_id = avatar.assets.get("voice_id")
         face_key = avatar.assets["face_image"]
         # A picker voice (a reusable Voice object) overrides the avatar's own voice.
         brief_voice = (p.brief or {}).get("voice_id")
@@ -1060,6 +1118,10 @@ async def handle_plan_generate(ctx: "WorkerContext", payload: dict) -> None:
             if v and v.status == "ready" and v.external_id:
                 voice_id = v.external_id
                 print(f"plan {plan_id}: using selected voice {v.id} ({v.label})")
+        if not voice_id:
+            raise RuntimeError(
+                "no voice available for this avatar — select a voice before generating"
+            )
         # A picked look swaps the first frame: the avatar is rendered wearing that
         # look instead of the raw recording frame.
         look_index = (p.brief or {}).get("look_index")
@@ -1131,12 +1193,13 @@ async def handle_voice_clone(ctx: "WorkerContext", payload: dict) -> None:
         raw = tmp / "sample.in"
         sample_bytes = await ctx.storage.get(sample_key)
         await anyio.to_thread.run_sync(lambda: raw.write_bytes(sample_bytes))
-        # Normalize any container (webm/opus, mp4, wav) to a clean mono wav the
-        # clone APIs reliably accept.
-        wav = await media.extract_audio(str(raw), str(tmp / "sample.wav"))
-        external_id = await _clone_with_capacity(ctx, wav)
+        # Normalize any container (webm/opus, mp4, wav) to a clean mono MP3,
+        # length-capped so it stays under the providers' upload size limit
+        # (ElevenLabs IVC rejects files > 11MB).
+        sample = await media.compress_for_clone(str(raw), str(tmp / "sample.mp3"))
+        external_id = await _clone_with_capacity(ctx, sample)
         candidates = await voice_clone.elevenlabs_previews(external_id)
-        fish = await voice_clone.fish_candidate(wav)
+        fish = await voice_clone.fish_candidate(sample)
         if fish:
             candidates.append(fish)
 

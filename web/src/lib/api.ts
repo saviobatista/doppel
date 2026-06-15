@@ -43,6 +43,8 @@ export interface AvatarItem {
   label?: string | null;
   preview_url: string | null;
   voice_id: string | null;
+  /** "video" (recorded) or "photo" (uploaded still). */
+  kind?: string;
   looks?: AvatarLook[];
 }
 
@@ -127,6 +129,26 @@ export async function createAvatar(
       );
     };
   });
+}
+
+/**
+ * Create an avatar from a single still image (any format, incl. webp). The photo
+ * becomes the first frame; the server generates looks + an idle loop and skips
+ * voice cloning (no audio). Returns the new avatar id.
+ */
+export async function createAvatarPhoto(file: Blob, label?: string): Promise<string> {
+  await ensureSession();
+  const form = new FormData();
+  const name = (file as File).name || "photo";
+  form.set("photo", file, name);
+  if (label) form.set("label", label);
+  const resp = await fetch(`${BASE}/v1/avatars/photo`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: form,
+  });
+  if (!resp.ok) throw new Error(`create avatar photo failed: ${resp.status}`);
+  return (await resp.json()).avatar_id as string;
 }
 
 export async function renameAvatar(avatarId: string, label: string): Promise<void> {

@@ -15,14 +15,38 @@ import { cn } from "@/lib/cn";
 export function LiveAvatarVideo({
   helloUrl,
   idleUrl,
+  posterUrl,
 }: {
-  helloUrl: string;
+  helloUrl: string | null;
   idleUrl: string | null;
+  posterUrl?: string | null;
 }) {
   const helloRef = useRef<HTMLVideoElement>(null);
   const idleRef = useRef<HTMLVideoElement>(null);
   const [onIdle, setOnIdle] = useState(false);
   const [muted, setMuted] = useState(true);
+
+  // Photo avatars (and any voiceless avatar) have no greeting: just loop the
+  // idle "live" clip, or fall back to the still poster if even that is missing.
+  if (!helloUrl) {
+    return (
+      <div className="relative aspect-[9/16] w-full bg-black">
+        {idleUrl ? (
+          <video
+            src={idleUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : posterUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={posterUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : null}
+      </div>
+    );
+  }
 
   const handleHelloEnded = () => {
     if (!idleUrl) {
