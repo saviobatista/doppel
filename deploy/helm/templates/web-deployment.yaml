@@ -25,15 +25,25 @@ spec:
           env:
             - name: NEXT_TELEMETRY_DISABLED
               value: "1"
+            - name: BASIC_AUTH_USER
+              valueFrom:
+                secretKeyRef:
+                  name: kortes-secrets
+                  key: BASIC_AUTH_USER
+            - name: BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kortes-secrets
+                  key: BASIC_AUTH_PASSWORD
+          # tcpSocket (e nao httpGet /): o proxy responde 401 (Basic Auth) em /,
+          # o que reprovaria um probe HTTP e tiraria o pod do Service.
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.web.port }}
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: {{ .Values.web.port }}
             initialDelaySeconds: 25
             periodSeconds: 20

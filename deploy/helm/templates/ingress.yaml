@@ -14,6 +14,9 @@ metadata:
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certArn }}
     # idle_timeout alto: o app usa SSE de longa duracao (eventos de plan/video).
     alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=300
+    # Health check (path / em ambos os backends): o web fica atras de Basic Auth
+    # (401) e a API nao tem rota / (404). Aceita ambos como "vivo".
+    alb.ingress.kubernetes.io/success-codes: '200,401,404'
 spec:
   ingressClassName: alb
   rules:
