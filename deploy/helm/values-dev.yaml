@@ -1,0 +1,16 @@
+# Overrides do ambiente dev (cluster mda-development).
+image:
+  tag: "0aeb46c"
+
+serviceAccount:
+  roleArn: arn:aws:iam::523083723230:role/kortes-app-dev
+
+web:
+  apiUrl: https://api.kortes.ai
+
+ingress:
+  certArn: arn:aws:acm:us-east-1:523083723230:certificate/b435c718-3382-4c69-9a9b-47826be27b09
+  webHosts:
+    - kortes.ai
+    - www.kortes.ai
+  apiHost: api.kortes.ai

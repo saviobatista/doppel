@@ -1,0 +1,68 @@
+# Defaults do chart. Overrides do ambiente em values-dev.yaml.
+namespace: kortes-dev
+
+image:
+  registry: 523083723230.dkr.ecr.us-east-1.amazonaws.com
+  tag: latest          # sobrescrito por values-dev (SHA do commit)
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: kortes-app
+  roleArn: ""          # IRSA - sobrescrito por values-dev
+
+api:
+  replicas: 1          # 1 replica: a migration roda no entrypoint (evita corrida)
+  port: 8000
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+web:
+  replicas: 2
+  port: 3000
+  apiUrl: ""           # sobrescrito por values-dev
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+postgres:
+  image: postgres:17-alpine
+  storage: 20Gi
+  port: 5432
+
+redis:
+  image: redis:7-alpine
+  storage: 5Gi
+  port: 6379
+
+ingress:
+  certArn: ""          # ACM - sobrescrito por values-dev
+  group: kortes-dev
+  webHosts: []         # sobrescrito por values-dev
+  apiHost: ""          # sobrescrito por values-dev
+
+# ConfigMap kortes-config (env nao-sensivel). Secrets vao no kortes-secrets.
+config:
+  ANTHROPIC_MODEL: claude-sonnet-4-6
+  ANTHROPIC_PROMPT_MODEL: claude-opus-4-7
+  ANTHROPIC_PLANNER_MODEL: claude-sonnet-4-6
+  ANTHROPIC_RESEARCH_MODEL: claude-opus-4-8
+  ELEVENLABS_MODEL: eleven_multilingual_v2
+  FAL_LIPSYNC_MODEL: veed/fabric-1.0
+  FAL_BROLL_MODEL: fal-ai/kling-video/v2.1/standard/image-to-video
+  FAL_T2I_MODEL: fal-ai/flux/schnell
+  RESEARCH_MODE: serpapi_rest
+  PIPELINE_CONCURRENCY: "4"
+  VIDEO_TARGET_SECONDS: "10"
+  CAPTION_FONT: "DejaVu Sans"
+  DOPPEL_S3_ENDPOINT: ""                          # vazio = AWS S3 real (via IRSA)
+  DOPPEL_S3_BUCKET: kortes-media-dev-us-east-1
+  DOPPEL_S3_REGION: us-east-1
+  AWS_REGION: us-east-1
+  DOPPEL_CORS_ORIGINS: "https://kortes.ai,https://www.kortes.ai"

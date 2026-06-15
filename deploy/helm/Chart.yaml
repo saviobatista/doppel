@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kortes
+description: Kortes - gerador de vídeos de avatar com IA (api + web + worker + Postgres + Redis)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

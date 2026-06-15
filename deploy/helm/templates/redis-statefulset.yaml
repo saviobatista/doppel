@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kortes-redis
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kortes.labels" . | nindent 4 }}
+spec:
+  serviceName: kortes-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kortes-redis
+  template:
+    metadata:
+      labels:
+        app: kortes-redis
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args: ["--appendonly", "yes"]
+          ports:
+            - containerPort: {{ .Values.redis.port }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}

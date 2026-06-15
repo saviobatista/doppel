@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kortes-web
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kortes.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      app: kortes-web
+  template:
+    metadata:
+      labels:
+        app: kortes-web
+        {{- include "kortes.labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.image.registry }}/kortes-web:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          env:
+            - name: NEXT_TELEMETRY_DISABLED
+              value: "1"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.web.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.web.port }}
+            initialDelaySeconds: 25
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}

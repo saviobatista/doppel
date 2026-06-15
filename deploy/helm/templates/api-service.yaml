@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kortes-api
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kortes.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: kortes-api
+  ports:
+    - name: http
+      port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}

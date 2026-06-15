@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kortes-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kortes.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels:
+      app: kortes-worker
+  template:
+    metadata:
+      labels:
+        app: kortes-worker
+        {{- include "kortes.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      containers:
+        - name: worker
+          image: {{ .Values.image.registry }}/kortes-api:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # command != uvicorn -> o entrypoint NAO roda migration; o loop tolera
+          # o schema ainda nao existir (retry) ate a api migrar.
+          command: ["python", "-m", "workers.worker"]
+          envFrom:
+            - configMapRef:
+                name: kortes-config
+            - secretRef:
+                name: kortes-secrets
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
