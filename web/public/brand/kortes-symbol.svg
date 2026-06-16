@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kortes">
+  <title>Kortes</title>
+  <defs>
+    <linearGradient id="kortesGrad" x1="24" y1="104" x2="104" y2="24" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6D28D9"/>
+      <stop offset="0.55" stop-color="#9333EA"/>
+      <stop offset="1" stop-color="#C77DFF"/>
+    </linearGradient>
+  </defs>
+  <!-- Cabos da tesoura (aneis): dois quadrados vazados a esquerda -->
+  <rect x="18" y="22" width="26" height="26" rx="7" stroke="url(#kortesGrad)" stroke-width="7"/>
+  <rect x="18" y="80" width="26" height="26" rx="7" stroke="url(#kortesGrad)" stroke-width="7"/>
+  <!-- Laminas: cruzam no pivo central e formam as diagonais do K -->
+  <path d="M44 46 L108 104" stroke="url(#kortesGrad)" stroke-width="9" stroke-linecap="round"/>
+  <path d="M44 82 L108 24" stroke="url(#kortesGrad)" stroke-width="9" stroke-linecap="round"/>
+  <!-- Pivo da tesoura -->
+  <circle cx="64" cy="64" r="6" fill="#0A0A0F" stroke="url(#kortesGrad)" stroke-width="3"/>
+</svg>
